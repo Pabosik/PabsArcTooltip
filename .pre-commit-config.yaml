@@ -1,0 +1,20 @@
+repos:
+  # Common file hygiene / sanity checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  # Ruff: fast linter + formatter (replaces flake8/isort/black in many setups)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.8
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format

@@ -1,0 +1,9 @@
+.venv
+tmp
+__pycache__/
+*.py[oc]
+debug
+.env
+
+.claude
+.vscode
