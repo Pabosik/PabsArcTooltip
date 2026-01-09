@@ -3,7 +3,7 @@ name = "arc-raiders-helper"
 version = "0.1.0"
 description = "Item recommendation overlay for Arc Raiders"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "pytesseract>=0.3.10",
     "pillow>=10.0.0",
@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "pyinstaller>=6.0.0",
 ]
 
 [project.scripts]

@@ -89,6 +89,15 @@ class OCREngine:
         image = ImageGrab.grab(bbox=(left, top, right, bottom))
         return image, cursor
 
+    def check_trigger_any(self, regions: list[Region]) -> bool:
+        """
+        Check if the trigger word (INVENTORY) is visible in any of the regions.
+        """
+        for region in regions:
+            if self.check_trigger(region):
+                return True
+        return False
+
     def preprocess_for_ocr(
         self, image: Image.Image, invert: bool = True, scale: int = 2
     ) -> Image.Image:

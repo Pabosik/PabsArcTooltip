@@ -10,13 +10,13 @@ from tkinter import ttk
 from PIL import ImageGrab
 from PIL import ImageTk
 
-from .config import OverlaySettings
-from .config import ScanSettings
-from .config import Settings
-from .config import TooltipRegion
-from .config import TriggerRegion
-from .config import get_settings
-from .ocr import get_ocr_engine
+from arc_helper.config import OverlaySettings
+from arc_helper.config import ScanSettings
+from arc_helper.config import Settings
+from arc_helper.config import TooltipRegion
+from arc_helper.config import TriggerRegion
+from arc_helper.config import get_settings
+from arc_helper.ocr import get_ocr_engine
 
 
 class RegionSelector:

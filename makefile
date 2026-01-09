@@ -5,7 +5,7 @@ lock:
 env:
 	rm uv.lock
 	uv lock
-	uv sync
+	uv sync --all-extras
 
 run:
 	uv run arc-helper

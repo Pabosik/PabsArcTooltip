@@ -14,14 +14,14 @@ from threading import Thread
 
 from dotenv import load_dotenv
 
-from src.arc_helper.config import get_settings
-from src.arc_helper.config import reload_settings
-from src.arc_helper.database import Database
-from src.arc_helper.database import Item
-from src.arc_helper.database import get_database
-from src.arc_helper.ocr import get_ocr_engine
-from src.arc_helper.overlay import OverlayWindow
-from src.arc_helper.overlay import StatusWindow
+from arc_helper.config import get_settings
+from arc_helper.config import reload_settings
+from arc_helper.database import Database
+from arc_helper.database import Item
+from arc_helper.database import get_database
+from arc_helper.ocr import get_ocr_engine
+from arc_helper.overlay import OverlayWindow
+from arc_helper.overlay import StatusWindow
 
 load_dotenv(Path(__file__).with_name(".env"), override=False)
 
@@ -157,7 +157,9 @@ class Scanner:
                 if self.state == ScannerState.IDLE:
                     self._update_status("scanning")
 
-                    if ocr.check_trigger(settings.trigger_region):
+                    if ocr.check_trigger_any(
+                        [settings.trigger_region, settings.trigger_region2]
+                    ):
                         # Trigger detected! Switch to active mode
                         self.state = ScannerState.ACTIVE
                         self._update_status("active")
@@ -171,7 +173,9 @@ class Scanner:
                 # Phase 2: Active mode - scan tooltip
                 elif self.state == ScannerState.ACTIVE:
                     # First, verify trigger is still present
-                    if not ocr.check_trigger(settings.trigger_region):
+                    if not ocr.check_trigger_any(
+                        [settings.trigger_region, settings.trigger_region2]
+                    ):
                         # Inventory closed, go back to idle
                         self.state = ScannerState.IDLE
                         self._update_status("scanning")
@@ -292,6 +296,13 @@ class Application:
         )
         print(
             f"  Size: {self.settings.trigger_region.width}x{self.settings.trigger_region.height}"
+        )
+        print("Trigger Region 2:")
+        print(
+            f"  Position: ({self.settings.trigger_region2.x}, {self.settings.trigger_region2.y})"
+        )
+        print(
+            f"  Size: {self.settings.trigger_region2.width}x{self.settings.trigger_region2.height}"
         )
         print("=" * 50)
         print(f"Trigger scan interval: {self.settings.scan.trigger_scan_interval}s")

@@ -108,7 +108,7 @@ Or use the sample file:
 ```python
 from arc_helper.database import load_csv_to_database
 
-load_csv_to_database("sample_items.csv")
+load_csv_to_database("items.csv")
 ```
 
 ## Usage
@@ -236,7 +236,7 @@ arc-raiders-helper/
 ├── pyproject.toml           # Package config (uv/pip)
 ├── .env.example             # Example configuration
 ├── .env                     # Your configuration (create this)
-├── sample_items.csv         # Sample item data
+├── items.csv         # Sample item data
 ├── items.db                 # SQLite database (created on first run)
 └── src/arc_helper/
     ├── __init__.py
