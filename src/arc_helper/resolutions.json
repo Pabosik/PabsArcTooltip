@@ -2,34 +2,34 @@
   "_comment": "Pre-calibrated resolution profiles for Arc Raiders Helper",
   "resolutions": {
     "3440x1440": {
-      "name": "Ultrawide QHD (21:9)",
+      "name": "Ultrawide QHD (21:9) 3440x1440",
       "trigger_region": {"x": 1450, "y": 23, "width": 173, "height": 44},
       "trigger_region2": {"x": 1295, "y": 38, "width": 173, "height": 44},
       "tooltip_capture": {"width": 550, "height": 550, "offset_x": 50, "offset_y": -500}
     },
     "2560x1440": {
-      "name": "QHD (16:9)",
-      "trigger_region": {"x": null, "y": null, "width": null, "height": null},
-      "trigger_region2": {"x": null, "y": null, "width": null, "height": null},
-      "tooltip_capture": {"width": null, "height": null, "offset_x": null, "offset_y": null}
+      "name": "QHD (16:9) 2560x1440",
+      "trigger_region": {"x": 1020, "y": 30, "width": 160, "height": 30},
+      "trigger_region2": {"x": 860, "y": 45, "width": 160, "height": 30},
+      "tooltip_capture": {"width": 530, "height": 650, "offset_x": 50, "offset_y": -600}
     },
     "1920x1080": {
-      "name": "Full HD (16:9)",
-      "trigger_region": {"x": null, "y": null, "width": null, "height": null},
-      "trigger_region2": {"x": null, "y": null, "width": null, "height": null},
-      "tooltip_capture": {"width": null, "height": null, "offset_x": null, "offset_y": null}
+      "name": "Full HD (16:9) 1920x1080",
+      "trigger_region": {"x": 760, "y": 20, "width": 125, "height": 25},
+      "trigger_region2": {"x": 650, "y": 35, "width": 125, "height": 25},
+      "tooltip_capture": {"width": 450, "height": 600, "offset_x": 35, "offset_y": -440}
     },
     "3840x2160": {
-      "name": "4K UHD (16:9)",
+      "name": "4K UHD (16:9) 3840x2160",
       "trigger_region": {"x": null, "y": null, "width": null, "height": null},
       "trigger_region2": {"x": null, "y": null, "width": null, "height": null},
       "tooltip_capture": {"width": null, "height": null, "offset_x": null, "offset_y": null}
     },
     "2560x1080": {
-      "name": "Ultrawide FHD (21:9)",
-      "trigger_region": {"x": null, "y": null, "width": null, "height": null},
-      "trigger_region2": {"x": null, "y": null, "width": null, "height": null},
-      "tooltip_capture": {"width": null, "height": null, "offset_x": null, "offset_y": null}
+      "name": "Ultrawide FHD (21:9) 2560x1080",
+      "trigger_region": {"x": 1085, "y": 20, "width": 120, "height": 28},
+      "trigger_region2": {"x": 970, "y": 35, "width": 120, "height": 25},
+      "tooltip_capture": {"width": 440, "height": 560, "offset_x": 40, "offset_y": -495}
     }
   }
 }

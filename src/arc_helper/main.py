@@ -14,12 +14,13 @@ from threading import Thread
 
 from dotenv import load_dotenv
 
+from arc_helper.config import SettingsManager
 from arc_helper.config import get_settings
 from arc_helper.config import logger
-from arc_helper.config import reload_settings
 from arc_helper.database import Database
 from arc_helper.database import Item
 from arc_helper.database import get_database
+from arc_helper.ocr import OCREngineManager
 from arc_helper.ocr import get_ocr_engine
 from arc_helper.overlay import OverlayWindow
 from arc_helper.overlay import StatusWindow
@@ -254,7 +255,7 @@ class Application:
     def __init__(self):
         """Initialize the application."""
         # Load settings
-        self.settings = reload_settings()
+        self.settings = get_settings()
 
         # Initialize database
         self.db = get_database()
@@ -345,24 +346,32 @@ def check_first_run() -> bool:
     profile_manager = get_profile_manager()
     resolution = profile_manager.get_resolution_key()
 
-    # Check if current settings are uncalibrated
     if profile_manager.is_uncalibrated():
         logger.info(f"Detected resolution: {resolution}")
+        logger.info("Settings are uncalibrated, checking for profile...")
 
-        # Try to apply a known profile
         if profile_manager.has_profile():
             logger.info(f"Found profile for {resolution}, applying...")
             profile_manager.apply_profile()
+
+            # Force complete reload of everything
+            SettingsManager.reload()
+            OCREngineManager.reset()
+
+            # Verify the reload worked
+            new_settings = SettingsManager.get()
+            logger.info(
+                f"After reload - Trigger region: ({new_settings.trigger_region.x}, {new_settings.trigger_region.y})"
+            )
+
             logger.info("Profile applied successfully!")
             return True
-        # No profile available
         supported = profile_manager.get_supported_resolutions()
-        logger.warning(f"\nNo pre-configured profile found for {resolution}.")
-        logger.warning(
+        logger.warning(f"No pre-configured profile found for {resolution}.")
+        logger.info(
             f"Supported resolutions: {', '.join(supported) if supported else 'None yet'}"
         )
-        logger.warning("\nPlease run the Calibration tool (Calibrate.exe) to configure")
-        logger.warning("the screen regions for your resolution.")
+        logger.info("Please run the Calibration tool to configure screen regions.")
         return False
 
     return True
@@ -374,6 +383,23 @@ def main() -> None:
     if not check_first_run():
         input("\nPress Enter to exit...")
         return
+
+    # NOW get settings - after potential profile application
+    settings = get_settings()
+
+    # Log the settings
+    logger.info("Settings loaded:")
+    logger.info("Trigger Region:")
+    logger.info(
+        f"  Position: ({settings.trigger_region.x}, {settings.trigger_region.y})"
+    )
+    logger.info(
+        f"  Size: {settings.trigger_region.width}x{settings.trigger_region.height}"
+    )
+    # ... rest of logging
+
+    # Initialize OCR engine AFTER settings are finalized
+    _ = get_ocr_engine()
     app = Application()
     app.run()
 

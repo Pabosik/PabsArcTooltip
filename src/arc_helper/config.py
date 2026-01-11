@@ -7,6 +7,7 @@ import ctypes
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
@@ -127,10 +128,10 @@ class TooltipCaptureSettings(BaseSettings):
         extra="ignore",
     )
 
-    width: int = Field(default=550, description="Width of capture area around cursor")
-    height: int = Field(default=550, description="Height of capture area around cursor")
-    offset_x: int = Field(default=50, description="X offset from cursor")
-    offset_y: int = Field(default=-500, description="Y offset from cursor")
+    width: int = Field(default=1, description="Width of capture area around cursor")
+    height: int = Field(default=1, description="Height of capture area around cursor")
+    offset_x: int = Field(default=0, description="X offset from cursor")
+    offset_y: int = Field(default=0, description="Y offset from cursor")
 
 
 class OverlaySettings(BaseSettings):
@@ -245,6 +246,10 @@ class Settings(BaseSettings):
 
         with Path(env_path).open("w", encoding="utf-8") as f:
             f.write("\n".join(lines))
+            f.flush()  # Add this line
+
+        # Add this line - reload dotenv to pick up new values
+        load_dotenv(env_path, override=True)
 
 
 class SettingsManager:

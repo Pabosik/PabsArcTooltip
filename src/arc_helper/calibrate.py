@@ -125,6 +125,161 @@ class RegionSelector:
         return (x, y, x + self.width.get(), y + self.height.get())
 
 
+class TooltipCaptureConfig:
+    """Widget for configuring cursor-relative tooltip capture."""
+
+    def __init__(
+        self,
+        parent: ttk.Frame,
+        initial_width: int,
+        initial_height: int,
+        initial_offset_x: int,
+        initial_offset_y: int,
+    ):
+        self.parent = parent
+
+        # Current values
+        self.width = tk.IntVar(value=initial_width)
+        self.height = tk.IntVar(value=initial_height)
+        self.offset_x = tk.IntVar(value=initial_offset_x)
+        self.offset_y = tk.IntVar(value=initial_offset_y)
+
+        # Overlay window for visualization
+        self.overlay: tk.Toplevel | None = None
+        self.is_tracking = False
+
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        """Create UI elements."""
+        frame = ttk.LabelFrame(
+            self.parent, text="Tooltip Capture (follows cursor)", padding=10
+        )
+        frame.pack(fill="x", pady=5)
+
+        # Explanation
+        ttk.Label(
+            frame,
+            text="This area follows your cursor. Adjust offset and size\nso it captures the tooltip when hovering over items.",
+            justify="left",
+            foreground="gray",
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+
+        # Grid of sliders
+        sliders = [
+            ("Width", self.width, 100, 800),
+            ("Height", self.height, 100, 800),
+            ("Offset X", self.offset_x, -500, 500),
+            ("Offset Y", self.offset_y, -800, 200),
+        ]
+
+        for row, (label, var, min_val, max_val) in enumerate(sliders, start=1):
+            ttk.Label(frame, text=label, width=8).grid(row=row, column=0, sticky="w")
+
+            slider = ttk.Scale(
+                frame,
+                from_=min_val,
+                to=max_val,
+                variable=var,
+                orient="horizontal",
+                length=200,
+                command=lambda _, v=var: self._on_change(),
+            )
+            slider.grid(row=row, column=1, sticky="ew", padx=5)
+
+            value_label = ttk.Label(frame, textvariable=var, width=6)
+            value_label.grid(row=row, column=2)
+
+        frame.columnconfigure(1, weight=1)
+
+    def _on_change(self) -> None:
+        """Update overlay when values change."""
+        if self.overlay and self.overlay.winfo_exists():
+            self._update_overlay_position()
+
+    def start_tracking(self) -> None:
+        """Start showing overlay that follows cursor."""
+        if self.overlay:
+            self.stop_tracking()
+
+        self.overlay = tk.Toplevel()
+        self.overlay.attributes("-topmost", True)
+        self.overlay.attributes("-alpha", 0.3)
+        self.overlay.overrideredirect(True)
+        self.overlay.config(bg="green")
+
+        self.is_tracking = True
+        self._track_cursor()
+
+    def _track_cursor(self) -> None:
+        """Update overlay position to follow cursor."""
+        if not self.is_tracking or not self.overlay:
+            return
+
+        try:
+            if not self.overlay.winfo_exists():
+                self.is_tracking = False
+                return
+
+            self._update_overlay_position()
+
+            # Schedule next update (50ms = 20fps)
+            self.overlay.after(50, self._track_cursor)
+
+        except tk.TclError:
+            self.is_tracking = False
+
+    def _update_overlay_position(self) -> None:
+        """Update overlay to current cursor position + offset."""
+        if not self.overlay or not self.overlay.winfo_exists():
+            return
+
+        # Get cursor position
+        try:
+            x = self.overlay.winfo_pointerx()
+            y = self.overlay.winfo_pointery()
+        except tk.TclError:
+            return
+
+        # Apply offset
+        left = x + self.offset_x.get()
+        top = y + self.offset_y.get()
+
+        # Update overlay
+        self.overlay.geometry(f"{self.width.get()}x{self.height.get()}+{left}+{top}")
+
+    def stop_tracking(self) -> None:
+        """Stop tracking and hide overlay."""
+        self.is_tracking = False
+        if self.overlay:
+            try:
+                if self.overlay.winfo_exists():
+                    self.overlay.destroy()
+            except tk.TclError:
+                pass
+            self.overlay = None
+
+    def capture_at_cursor(self) -> tuple[ImageGrab.Image, int, int] | None:
+        """Capture the area at current cursor position."""
+        try:
+            # Get cursor position using tkinter
+            root = self.parent.winfo_toplevel()
+            cursor_x = root.winfo_pointerx()
+            cursor_y = root.winfo_pointery()
+        except tk.TclError:
+            return None
+
+        # Calculate capture region
+        left = max(0, cursor_x + self.offset_x.get())
+        top = max(0, cursor_y + self.offset_y.get())
+        right = left + self.width.get()
+        bottom = top + self.height.get()
+
+        # Capture
+        image = ImageGrab.grab(bbox=(left, top, right, bottom))
+        return image, cursor_x, cursor_y
+
+
 class TempRegion:
     """Temporary region class for OCR testing."""
 
@@ -260,29 +415,31 @@ class CalibrationTool:
         # =====================================================================
         # Tooltip Region
         # =====================================================================
-        self.tooltip_selector = RegionSelector(
+        self.tooltip_capture = TooltipCaptureConfig(
             main_frame,
-            "Tooltip Region (Item name)",
-            self.settings.tooltip_region.x,
-            self.settings.tooltip_region.y,
-            self.settings.tooltip_region.width,
-            self.settings.tooltip_region.height,
-            color="green",
+            initial_width=self.settings.tooltip_capture.width,
+            initial_height=self.settings.tooltip_capture.height,
+            initial_offset_x=self.settings.tooltip_capture.offset_x,
+            initial_offset_y=self.settings.tooltip_capture.offset_y,
         )
 
         tooltip_btn_frame = ttk.Frame(main_frame)
         tooltip_btn_frame.pack(fill="x", pady=5)
         ttk.Button(
             tooltip_btn_frame,
-            text="Show Region",
-            command=self.tooltip_selector.show_overlay,
+            text="Start Tracking",
+            command=self.tooltip_capture.start_tracking,
         ).pack(side="left", padx=2)
         ttk.Button(
-            tooltip_btn_frame, text="Hide", command=self.tooltip_selector.hide_overlay
+            tooltip_btn_frame,
+            text="Stop Tracking",
+            command=self.tooltip_capture.stop_tracking,
         ).pack(side="left", padx=2)
-        ttk.Button(tooltip_btn_frame, text="Test OCR", command=self._test_tooltip).pack(
-            side="left", padx=2
-        )
+        ttk.Button(
+            tooltip_btn_frame,
+            text="Test OCR at Cursor",
+            command=self._test_tooltip_at_cursor,
+        ).pack(side="left", padx=2)
 
         ttk.Separator(main_frame, orient="horizontal").pack(fill="x", pady=10)
 
@@ -410,12 +567,45 @@ class CalibrationTool:
         self.preview_label.config(image=photo)
         self.preview_label.image = photo  # Keep reference
 
+    def _test_tooltip_at_cursor(self) -> None:
+        """Test OCR on tooltip at current cursor position."""
+        result = self.tooltip_capture.capture_at_cursor()
+
+        if result is None:
+            self.result_label.config(text="✗ Failed to capture", foreground="red")
+            return
+
+        image, cursor_x, cursor_y = result
+        self._show_preview(image)
+
+        # Use the OCR engine's tooltip preprocessing
+        processed = self.ocr.preprocess_tooltip(image)
+
+        try:
+            import pytesseract
+
+            text = pytesseract.image_to_string(processed, config="--psm 6")
+            item_name = self.ocr._parse_item_name_from_tooltip(text)
+
+            if item_name:
+                self.result_label.config(
+                    text=f"✓ Found: '{item_name}'", foreground="green"
+                )
+            else:
+                self.result_label.config(
+                    text="✗ No item name detected", foreground="red"
+                )
+        except Exception as e:
+            self.result_label.config(text=f"✗ OCR Error: {e}", foreground="red")
+
     # =========================================================================
     # Configuration Methods
     # =========================================================================
 
     def _save_config(self) -> None:
         """Save configuration to .env file."""
+        from arc_helper.config import TooltipCaptureSettings
+
         settings = Settings(
             trigger_region=TriggerRegion(
                 x=self.trigger_selector.x.get(),
@@ -430,10 +620,16 @@ class CalibrationTool:
                 height=self.trigger_selector2.height.get(),
             ),
             tooltip_region=TooltipRegion(
-                x=self.tooltip_selector.x.get(),
-                y=self.tooltip_selector.y.get(),
-                width=self.tooltip_selector.width.get(),
-                height=self.tooltip_selector.height.get(),
+                x=0,  # No longer used, but keep for compatibility
+                y=0,
+                width=100,
+                height=100,
+            ),
+            tooltip_capture=TooltipCaptureSettings(
+                width=self.tooltip_capture.width.get(),
+                height=self.tooltip_capture.height.get(),
+                offset_x=self.tooltip_capture.offset_x.get(),
+                offset_y=self.tooltip_capture.offset_y.get(),
             ),
             overlay=OverlaySettings(),
             scan=ScanSettings(),
@@ -445,22 +641,22 @@ class CalibrationTool:
     def _reset_defaults(self) -> None:
         """Reset to default values."""
         # Trigger 1 defaults
-        self.trigger_selector.x.set(50)
-        self.trigger_selector.y.set(50)
-        self.trigger_selector.width.set(200)
-        self.trigger_selector.height.set(50)
+        self.trigger_selector.x.set(0)
+        self.trigger_selector.y.set(0)
+        self.trigger_selector.width.set(1)
+        self.trigger_selector.height.set(1)
 
         # Trigger 2 defaults
-        self.trigger_selector2.x.set(50)
-        self.trigger_selector2.y.set(100)
-        self.trigger_selector2.width.set(200)
-        self.trigger_selector2.height.set(50)
+        self.trigger_selector2.x.set(0)
+        self.trigger_selector2.y.set(0)
+        self.trigger_selector2.width.set(1)
+        self.trigger_selector2.height.set(1)
 
         # Tooltip defaults
-        self.tooltip_selector.x.set(500)
-        self.tooltip_selector.y.set(150)
-        self.tooltip_selector.width.set(400)
-        self.tooltip_selector.height.set(60)
+        self.tooltip_capture.offset_x.set(0)
+        self.tooltip_capture.offset_y.set(0)
+        self.tooltip_capture.width.set(1)
+        self.tooltip_capture.height.set(1)
 
     # =========================================================================
     # Database Management Methods
@@ -598,7 +794,7 @@ class CalibrationTool:
         """Handle window close."""
         self.trigger_selector.hide_overlay()
         self.trigger_selector2.hide_overlay()
-        self.tooltip_selector.hide_overlay()
+        self.tooltip_capture.stop_tracking()  # Changed from tooltip_selector
         self.root.destroy()
 
 
