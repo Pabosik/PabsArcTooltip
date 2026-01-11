@@ -1,9 +1,20 @@
 """Build script to create standalone executable."""
 
+import logging
 import shutil
+import sys
 from pathlib import Path
 
 import PyInstaller.__main__
+
+# Setup logging for build script
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+logger = logging.getLogger("build")
 
 ROOT = Path(__file__).parent
 DIST = ROOT / "dist"
@@ -14,22 +25,28 @@ TESSERACT_SRC = Path(r"C:\Program Files\Tesseract-OCR")
 
 def build():
     """Build the executable."""
+    logger.info("Starting build process...")
 
     # Clean previous builds
     if DIST.exists():
+        logger.info("Cleaning previous dist folder...")
         shutil.rmtree(DIST)
     if BUILD.exists():
+        logger.info("Cleaning previous build folder...")
         shutil.rmtree(BUILD)
 
     # Build main app using spec file
+    logger.info("Building main application...")
     PyInstaller.__main__.run(
         [
             "ArcRaidersHelper.spec",
             "--clean",
         ]
     )
+    logger.info("Main application built successfully")
 
     # Build calibration tool
+    logger.info("Building calibration tool...")
     PyInstaller.__main__.run(
         [
             "src/arc_helper/calibrate.py",
@@ -41,25 +58,32 @@ def build():
             "--clean",
         ]
     )
+    logger.info("Calibration tool built successfully")
 
     # Move calibrate exe to main folder
     calibrate_dir = DIST / "Calibrate"
     if calibrate_dir.exists():
         calibrate_exe = calibrate_dir / "Calibrate.exe"
         if calibrate_exe.exists():
+            logger.info("Moving Calibrate.exe to output folder...")
             shutil.copy(calibrate_exe, OUTPUT / "Calibrate.exe")
         shutil.rmtree(calibrate_dir)
 
     # Copy user-editable files
+    logger.info("Copying configuration files...")
     shutil.copy(ROOT / ".env.example", OUTPUT / ".env.example")
     shutil.copy(ROOT / ".env.example", OUTPUT / ".env")
     shutil.copy(ROOT / "sample_items.csv", OUTPUT / "sample_items.csv")
-    shutil.copy(ROOT / "README.md", OUTPUT / "README.md")
+    shutil.copy(
+        ROOT / "src" / "arc_helper" / "resolutions.json", OUTPUT / "resolutions.json"
+    )
+    if (ROOT / "README.md").exists():
+        shutil.copy(ROOT / "README.md", OUTPUT / "README.md")
 
     # Bundle Tesseract
     tesseract_dest = OUTPUT / "tesseract"
     if TESSERACT_SRC.exists():
-        print(f"Bundling Tesseract from {TESSERACT_SRC}...")
+        logger.info("Bundling Tesseract from %s...", TESSERACT_SRC)
 
         tesseract_dest.mkdir(exist_ok=True)
 
@@ -77,17 +101,18 @@ def build():
             if src.exists():
                 shutil.copy(src, tessdata_dest)
 
-        print("✓ Tesseract bundled")
+        logger.info("Tesseract bundled successfully")
     else:
-        print(f"⚠ Tesseract not found at {TESSERACT_SRC}")
+        logger.warning("Tesseract not found at %s", TESSERACT_SRC)
 
-    print("\n" + "=" * 50)
-    print("✓ Build complete!")
-    print("=" * 50)
-    print(f"\nOutput folder: {OUTPUT}")
-
+    # Summary
     total_size = sum(f.stat().st_size for f in OUTPUT.rglob("*") if f.is_file())
-    print(f"Total size: {total_size / 1024 / 1024:.1f} MB")
+
+    logger.info("=" * 50)
+    logger.info("Build complete!")
+    logger.info("=" * 50)
+    logger.info("Output folder: %s", OUTPUT)
+    logger.info(f"Total size: {total_size / 1024 / 1024:.1f} MB")
 
 
 if __name__ == "__main__":

@@ -7,10 +7,11 @@ import ctypes
 import sys
 from pathlib import Path
 
-from pydantic import BaseModel
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
+
+from .logging_config import setup_logging
 
 
 def get_app_dir() -> Path:
@@ -54,13 +55,13 @@ def get_tesseract_path() -> str | None:
     return None
 
 
-class Region(BaseModel):
-    """Base class for screen regions."""
+class RegionMixin:
+    """Mixin that adds bbox property to region classes."""
 
-    x: int = Field(default=0, description="Left edge X coordinate")
-    y: int = Field(default=0, description="Top edge Y coordinate")
-    width: int = Field(default=100, description="Region width")
-    height: int = Field(default=100, description="Region height")
+    x: int
+    y: int
+    width: int
+    height: int
 
     @property
     def bbox(self) -> tuple[int, int, int, int]:
@@ -68,43 +69,63 @@ class Region(BaseModel):
         return (self.x, self.y, self.x + self.width, self.y + self.height)
 
 
-class TriggerRegion(Region):
+class TriggerRegion(RegionMixin, BaseSettings):
     """Region where INVENTORY text appears - menu mode."""
 
-    model_config = SettingsConfigDict(env_prefix="TRIGGER_REGION_")
+    model_config = SettingsConfigDict(
+        env_prefix="TRIGGER_REGION_",
+        env_file=APP_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    x: int = Field(default=1450, description="Left edge of trigger region")
-    y: int = Field(default=23, description="Top edge of trigger region")
-    width: int = Field(default=173, description="Width of trigger region")
-    height: int = Field(default=44, description="Height of trigger region")
+    x: int = Field(default=0, description="Left edge of trigger region")
+    y: int = Field(default=0, description="Top edge of trigger region")
+    width: int = Field(default=1, description="Width of trigger region")
+    height: int = Field(default=1, description="Height of trigger region")
 
 
-class TriggerRegion2(Region):
+class TriggerRegion2(RegionMixin, BaseSettings):
     """Region where INVENTORY text appears - in-raid mode."""
 
-    model_config = SettingsConfigDict(env_prefix="TRIGGER_REGION2_")
+    model_config = SettingsConfigDict(
+        env_prefix="TRIGGER_REGION2_",
+        env_file=APP_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    x: int = Field(default=1295, description="Left edge of trigger region 2")
-    y: int = Field(default=38, description="Top edge of trigger region 2")
-    width: int = Field(default=173, description="Width of trigger region 2")
-    height: int = Field(default=44, description="Height of trigger region 2")
+    x: int = Field(default=0, description="Left edge of trigger region")
+    y: int = Field(default=0, description="Top edge of trigger region")
+    width: int = Field(default=1, description="Width of trigger region")
+    height: int = Field(default=1, description="Height of trigger region")
 
 
-class TooltipRegion(Region):
+class TooltipRegion(RegionMixin, BaseSettings):
     """Region where item name appears in tooltip - used for calibration only."""
 
-    model_config = SettingsConfigDict(env_prefix="TOOLTIP_REGION_")
+    model_config = SettingsConfigDict(
+        env_prefix="TOOLTIP_REGION_",
+        env_file=APP_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    x: int = Field(default=500, description="Left edge of tooltip region")
-    y: int = Field(default=150, description="Top edge of tooltip region")
-    width: int = Field(default=400, description="Width of tooltip region")
-    height: int = Field(default=60, description="Height of tooltip region")
+    x: int = Field(default=0, description="Left edge of trigger region")
+    y: int = Field(default=0, description="Top edge of trigger region")
+    width: int = Field(default=1, description="Width of trigger region")
+    height: int = Field(default=1, description="Height of trigger region")
 
 
 class TooltipCaptureSettings(BaseSettings):
     """Settings for cursor-relative tooltip capture."""
 
-    model_config = SettingsConfigDict(env_prefix="TOOLTIP_CAPTURE_")
+    model_config = SettingsConfigDict(
+        env_prefix="TOOLTIP_CAPTURE_",
+        env_file=APP_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     width: int = Field(default=550, description="Width of capture area around cursor")
     height: int = Field(default=550, description="Height of capture area around cursor")
@@ -115,7 +136,12 @@ class TooltipCaptureSettings(BaseSettings):
 class OverlaySettings(BaseSettings):
     """Settings for the overlay window."""
 
-    model_config = SettingsConfigDict(env_prefix="OVERLAY_")
+    model_config = SettingsConfigDict(
+        env_prefix="OVERLAY_",
+        env_file=APP_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     x: int = Field(default=100, description="Overlay X position")
     y: int = Field(default=100, description="Overlay Y position")
@@ -128,7 +154,12 @@ class OverlaySettings(BaseSettings):
 class ScanSettings(BaseSettings):
     """Settings for scanning intervals."""
 
-    model_config = SettingsConfigDict(env_prefix="")
+    model_config = SettingsConfigDict(
+        env_prefix="",
+        env_file=APP_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     trigger_scan_interval: float = Field(
         default=0.5, description="Seconds between trigger scans"
@@ -170,21 +201,84 @@ class Settings(BaseSettings):
         default=False, description="Show red overlay for capture area"
     )
 
+    def save_to_env(self, env_path: Path | None = None) -> None:
+        """Save current settings to .env file."""
+        if env_path is None:
+            env_path = APP_DIR / ".env"
 
-# Singleton settings instance
-_settings: Settings | None = None
+        lines = [
+            "# Arc Raiders Helper Configuration",
+            "# =================================",
+            "",
+            "# Trigger region 1 - Menu mode",
+            f"TRIGGER_REGION_X={self.trigger_region.x}",
+            f"TRIGGER_REGION_Y={self.trigger_region.y}",
+            f"TRIGGER_REGION_WIDTH={self.trigger_region.width}",
+            f"TRIGGER_REGION_HEIGHT={self.trigger_region.height}",
+            "",
+            "# Trigger region 2 - In-raid mode",
+            f"TRIGGER_REGION2_X={self.trigger_region2.x}",
+            f"TRIGGER_REGION2_Y={self.trigger_region2.y}",
+            f"TRIGGER_REGION2_WIDTH={self.trigger_region2.width}",
+            f"TRIGGER_REGION2_HEIGHT={self.trigger_region2.height}",
+            "",
+            "# Tooltip capture",
+            f"TOOLTIP_CAPTURE_WIDTH={self.tooltip_capture.width}",
+            f"TOOLTIP_CAPTURE_HEIGHT={self.tooltip_capture.height}",
+            f"TOOLTIP_CAPTURE_OFFSET_X={self.tooltip_capture.offset_x}",
+            f"TOOLTIP_CAPTURE_OFFSET_Y={self.tooltip_capture.offset_y}",
+            "",
+            "# Overlay settings",
+            f"OVERLAY_X={self.overlay.x}",
+            f"OVERLAY_Y={self.overlay.y}",
+            f"OVERLAY_DISPLAY_TIME={self.overlay.display_time}",
+            f"OVERLAY_COOLDOWN={self.overlay.cooldown}",
+            "",
+            "# Scan intervals",
+            f"TRIGGER_SCAN_INTERVAL={self.scan.trigger_scan_interval}",
+            f"TOOLTIP_SCAN_INTERVAL={self.scan.tooltip_scan_interval}",
+            "",
+            "# Debug settings",
+            f"DEBUG_MODE={str(self.debug_mode).lower()}",
+            f"SHOW_CAPTURE_AREA={str(self.show_capture_area).lower()}",
+        ]
+
+        with Path(env_path).open("w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+
+class SettingsManager:
+    """Manages the singleton Settings instance."""
+
+    _instance: Settings | None = None
+
+    @classmethod
+    def get(cls) -> Settings:
+        if cls._instance is None:
+            cls._instance = Settings()
+        return cls._instance
+
+    @classmethod
+    def reload(cls) -> Settings:
+        cls._instance = Settings()
+        return cls._instance
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._instance = None
 
 
 def get_settings() -> Settings:
-    """Get the singleton settings instance."""
-    global _settings
-    if _settings is None:
-        _settings = Settings()
-    return _settings
+    return SettingsManager.get()
 
 
 def reload_settings() -> Settings:
-    """Reload settings from environment."""
-    global _settings
-    _settings = Settings()
-    return _settings
+    return SettingsManager.reload()
+
+
+# =============================================================================
+# Initialize logging once when this module is imported
+# =============================================================================
+
+_initial_settings = Settings()  # Load settings to get debug_mode
+logger = setup_logging(APP_DIR, _initial_settings.debug_mode)

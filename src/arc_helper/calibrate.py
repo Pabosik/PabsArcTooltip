@@ -4,18 +4,23 @@ Helps configure screen regions for trigger and tooltip detection.
 """
 
 import tkinter as tk
+from pathlib import Path
+from tkinter import filedialog
 from tkinter import messagebox
 from tkinter import ttk
 
 from PIL import ImageGrab
 from PIL import ImageTk
 
+from arc_helper.config import APP_DIR
 from arc_helper.config import OverlaySettings
 from arc_helper.config import ScanSettings
 from arc_helper.config import Settings
 from arc_helper.config import TooltipRegion
 from arc_helper.config import TriggerRegion
+from arc_helper.config import TriggerRegion2
 from arc_helper.config import get_settings
+from arc_helper.database import get_database
 from arc_helper.ocr import get_ocr_engine
 
 
@@ -71,7 +76,7 @@ class RegionSelector:
                 variable=var,
                 orient="horizontal",
                 length=200,
-                command=lambda _: self._on_change(),
+                command=lambda _, v=var: self._on_change(),
             )
             slider.grid(row=row, column=1, sticky="ew", padx=5)
 
@@ -91,7 +96,6 @@ class RegionSelector:
             self.overlay.destroy()
 
         self.overlay = tk.Toplevel()
-        self.overlay.attributes("-topmost", True)
         self.overlay.attributes("-alpha", 0.4)
         self.overlay.overrideredirect(True)
         self.overlay.config(bg=self.color)
@@ -108,13 +112,31 @@ class RegionSelector:
     def hide_overlay(self) -> None:
         """Hide the overlay."""
         if self.overlay:
-            self.overlay.destroy()
+            try:
+                if self.overlay.winfo_exists():
+                    self.overlay.destroy()
+            except tk.TclError:
+                pass  # Window already destroyed
             self.overlay = None
 
     def get_bbox(self) -> tuple[int, int, int, int]:
         """Get region as (left, top, right, bottom)."""
         x, y = self.x.get(), self.y.get()
         return (x, y, x + self.width.get(), y + self.height.get())
+
+
+class TempRegion:
+    """Temporary region class for OCR testing."""
+
+    def __init__(self, x: int, y: int, w: int, h: int):
+        self.x = x
+        self.y = y
+        self.width = w
+        self.height = h
+
+    @property
+    def bbox(self) -> tuple[int, int, int, int]:
+        return (self.x, self.y, self.x + self.width, self.y + self.height)
 
 
 class CalibrationTool:
@@ -124,7 +146,7 @@ class CalibrationTool:
         self.root = tk.Tk()
         self.root.title("Arc Raiders Helper - Calibration")
         self.root.attributes("-topmost", True)
-        self.root.resizable(False, False)
+        self.root.geometry("600x800")
 
         # Load current settings
         self.settings = get_settings()
@@ -132,11 +154,36 @@ class CalibrationTool:
         # OCR engine for testing
         self.ocr = get_ocr_engine()
 
+        # Database reference
+        self.db = get_database()
+
         self._setup_ui()
 
     def _setup_ui(self) -> None:
         """Create the calibration UI."""
-        main_frame = ttk.Frame(self.root, padding=15)
+        # Create canvas with scrollbar for long content
+        canvas = tk.Canvas(self.root)
+        scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Enable mousewheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Main content frame
+        main_frame = ttk.Frame(scrollable_frame, padding=15)
         main_frame.pack(fill="both", expand=True)
 
         # Instructions
@@ -144,7 +191,7 @@ class CalibrationTool:
             main_frame,
             text=(
                 "Configure the screen regions for Arc Raiders Helper:\n\n"
-                "1. TRIGGER region: Where 'INVENTORY' text appears\n"
+                "1. TRIGGER regions: Where 'INVENTORY' text appears\n"
                 "2. TOOLTIP region: Where item names appear\n\n"
                 "Use 'Show' to visualize each region on screen."
             ),
@@ -152,18 +199,19 @@ class CalibrationTool:
         )
         instructions.pack(fill="x", pady=(0, 15))
 
-        # Trigger region selector
+        # =====================================================================
+        # Trigger Region 1 (IN-MENU)
+        # =====================================================================
         self.trigger_selector = RegionSelector(
             main_frame,
-            "Trigger Region (INVENTORY text)",
+            "Trigger Region 1 (INVENTORY text IN-MENU)",
             self.settings.trigger_region.x,
             self.settings.trigger_region.y,
             self.settings.trigger_region.width,
             self.settings.trigger_region.height,
-            color="blue",
+            color="yellow",
         )
 
-        # Trigger buttons
         trigger_btn_frame = ttk.Frame(main_frame)
         trigger_btn_frame.pack(fill="x", pady=5)
         ttk.Button(
@@ -174,13 +222,44 @@ class CalibrationTool:
         ttk.Button(
             trigger_btn_frame, text="Hide", command=self.trigger_selector.hide_overlay
         ).pack(side="left", padx=2)
-        ttk.Button(trigger_btn_frame, text="Test OCR", command=self._test_trigger).pack(
-            side="left", padx=2
-        )
+        ttk.Button(
+            trigger_btn_frame, text="Test OCR", command=self._test_trigger1
+        ).pack(side="left", padx=2)
 
         ttk.Separator(main_frame, orient="horizontal").pack(fill="x", pady=10)
 
-        # Tooltip region selector
+        # =====================================================================
+        # Trigger Region 2 (IN-GAME)
+        # =====================================================================
+        self.trigger_selector2 = RegionSelector(
+            main_frame,
+            "Trigger Region 2 (INVENTORY text IN-GAME)",
+            self.settings.trigger_region2.x,
+            self.settings.trigger_region2.y,
+            self.settings.trigger_region2.width,
+            self.settings.trigger_region2.height,
+            color="blue",
+        )
+
+        trigger_btn_frame2 = ttk.Frame(main_frame)
+        trigger_btn_frame2.pack(fill="x", pady=5)
+        ttk.Button(
+            trigger_btn_frame2,
+            text="Show Region",
+            command=self.trigger_selector2.show_overlay,
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            trigger_btn_frame2, text="Hide", command=self.trigger_selector2.hide_overlay
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            trigger_btn_frame2, text="Test OCR", command=self._test_trigger2
+        ).pack(side="left", padx=2)
+
+        ttk.Separator(main_frame, orient="horizontal").pack(fill="x", pady=10)
+
+        # =====================================================================
+        # Tooltip Region
+        # =====================================================================
         self.tooltip_selector = RegionSelector(
             main_frame,
             "Tooltip Region (Item name)",
@@ -191,7 +270,6 @@ class CalibrationTool:
             color="green",
         )
 
-        # Tooltip buttons
         tooltip_btn_frame = ttk.Frame(main_frame)
         tooltip_btn_frame.pack(fill="x", pady=5)
         ttk.Button(
@@ -208,7 +286,9 @@ class CalibrationTool:
 
         ttk.Separator(main_frame, orient="horizontal").pack(fill="x", pady=10)
 
-        # Preview area
+        # =====================================================================
+        # OCR Preview Area
+        # =====================================================================
         preview_frame = ttk.LabelFrame(main_frame, text="OCR Test Result", padding=10)
         preview_frame.pack(fill="x", pady=5)
 
@@ -222,44 +302,74 @@ class CalibrationTool:
         )
         self.result_label.pack(pady=5)
 
-        # Action buttons
+        ttk.Separator(main_frame, orient="horizontal").pack(fill="x", pady=10)
+
+        # =====================================================================
+        # Database Management
+        # =====================================================================
+        db_frame = ttk.LabelFrame(main_frame, text="Item Database", padding=10)
+        db_frame.pack(fill="x", pady=5)
+
+        self.item_count_var = tk.StringVar()
+        self._update_item_count()
+
+        ttk.Label(db_frame, textvariable=self.item_count_var).pack(side="left", padx=5)
+
+        ttk.Button(db_frame, text="Load CSV...", command=self._load_csv).pack(
+            side="left", padx=5
+        )
+
+        ttk.Button(db_frame, text="View Items", command=self._view_items).pack(
+            side="left", padx=5
+        )
+
+        ttk.Button(db_frame, text="Clear Database", command=self._clear_database).pack(
+            side="left", padx=5
+        )
+
+        ttk.Separator(main_frame, orient="horizontal").pack(fill="x", pady=10)
+
+        # =====================================================================
+        # Action Buttons
+        # =====================================================================
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill="x", pady=(15, 0))
 
         ttk.Button(
             btn_frame, text="Save Configuration", command=self._save_config
         ).pack(side="left", padx=5)
+
         ttk.Button(
             btn_frame, text="Reset to Defaults", command=self._reset_defaults
         ).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Close", command=self.root.quit).pack(
+
+        ttk.Button(btn_frame, text="Close", command=self._on_close).pack(
             side="right", padx=5
         )
 
-    def _test_trigger(self) -> None:
-        """Test OCR on trigger region."""
-        bbox = self.trigger_selector.get_bbox()
+    # =========================================================================
+    # OCR Testing Methods
+    # =========================================================================
 
-        # Capture and test
+    def _test_trigger1(self) -> None:
+        """Test OCR on trigger region 1."""
+        self._test_region_for_inventory(self.trigger_selector)
+
+    def _test_trigger2(self) -> None:
+        """Test OCR on trigger region 2."""
+        self._test_region_for_inventory(self.trigger_selector2)
+
+    def _test_region_for_inventory(self, selector: RegionSelector) -> None:
+        """Test a region for INVENTORY text."""
+        bbox = selector.get_bbox()
         image = ImageGrab.grab(bbox=bbox)
-
-        # Show preview
         self._show_preview(image)
 
-        # Test for INVENTORY
-        class TempRegion:
-            def __init__(self, x, y, w, h):
-                self.x, self.y, self.width, self.height = x, y, w, h
-
-            @property
-            def bbox(self):
-                return (self.x, self.y, self.x + self.width, self.y + self.height)
-
         region = TempRegion(
-            self.trigger_selector.x.get(),
-            self.trigger_selector.y.get(),
-            self.trigger_selector.width.get(),
-            self.trigger_selector.height.get(),
+            selector.x.get(),
+            selector.y.get(),
+            selector.width.get(),
+            selector.height.get(),
         )
 
         found = self.ocr.check_trigger(region)
@@ -272,21 +382,8 @@ class CalibrationTool:
     def _test_tooltip(self) -> None:
         """Test OCR on tooltip region."""
         bbox = self.tooltip_selector.get_bbox()
-
-        # Capture and test
         image = ImageGrab.grab(bbox=bbox)
-
-        # Show preview
         self._show_preview(image)
-
-        # Extract item name
-        class TempRegion:
-            def __init__(self, x, y, w, h):
-                self.x, self.y, self.width, self.height = x, y, w, h
-
-            @property
-            def bbox(self):
-                return (self.x, self.y, self.x + self.width, self.y + self.height)
 
         region = TempRegion(
             self.tooltip_selector.x.get(),
@@ -304,26 +401,33 @@ class CalibrationTool:
 
     def _show_preview(self, image) -> None:
         """Show image preview."""
-        # Resize for display
         display_width = min(350, image.width)
         ratio = display_width / image.width
         display_height = int(image.height * ratio)
         display_img = image.resize((display_width, display_height))
 
-        # Convert for Tk
         photo = ImageTk.PhotoImage(display_img)
         self.preview_label.config(image=photo)
         self.preview_label.image = photo  # Keep reference
 
+    # =========================================================================
+    # Configuration Methods
+    # =========================================================================
+
     def _save_config(self) -> None:
         """Save configuration to .env file."""
-        # Build new settings
         settings = Settings(
             trigger_region=TriggerRegion(
                 x=self.trigger_selector.x.get(),
                 y=self.trigger_selector.y.get(),
                 width=self.trigger_selector.width.get(),
                 height=self.trigger_selector.height.get(),
+            ),
+            trigger_region2=TriggerRegion2(
+                x=self.trigger_selector2.x.get(),
+                y=self.trigger_selector2.y.get(),
+                width=self.trigger_selector2.width.get(),
+                height=self.trigger_selector2.height.get(),
             ),
             tooltip_region=TooltipRegion(
                 x=self.tooltip_selector.x.get(),
@@ -335,18 +439,22 @@ class CalibrationTool:
             scan=ScanSettings(),
         )
 
-        # Save to .env
         settings.save_to_env()
-
         messagebox.showinfo("Saved", "Configuration saved to .env file!")
 
     def _reset_defaults(self) -> None:
         """Reset to default values."""
-        # Trigger defaults
+        # Trigger 1 defaults
         self.trigger_selector.x.set(50)
         self.trigger_selector.y.set(50)
         self.trigger_selector.width.set(200)
         self.trigger_selector.height.set(50)
+
+        # Trigger 2 defaults
+        self.trigger_selector2.x.set(50)
+        self.trigger_selector2.y.set(100)
+        self.trigger_selector2.width.set(200)
+        self.trigger_selector2.height.set(50)
 
         # Tooltip defaults
         self.tooltip_selector.x.set(500)
@@ -354,13 +462,144 @@ class CalibrationTool:
         self.tooltip_selector.width.set(400)
         self.tooltip_selector.height.set(60)
 
+    # =========================================================================
+    # Database Management Methods
+    # =========================================================================
+
+    def _update_item_count(self) -> None:
+        """Update the item count display."""
+        count = self.db.count()
+        self.item_count_var.set(f"Items in database: {count}")
+
+    def _load_csv(self) -> None:
+        """Open file picker and load CSV into database."""
+        filepath = filedialog.askopenfilename(
+            title="Select Items CSV",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialdir=APP_DIR,
+        )
+
+        if not filepath:
+            return  # User cancelled
+
+        try:
+            self.db.load_csv(filepath)
+            self._update_item_count()
+            messagebox.showinfo(
+                "Success",
+                f"Loaded items from {Path(filepath).name}\n\n"
+                f"Database now contains {self.db.count()} items.",
+            )
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load CSV:\n\n{e}")
+
+    def _view_items(self) -> None:
+        """Show a window with all items in the database."""
+        items = self.db.get_all_items()
+
+        if not items:
+            messagebox.showinfo(
+                "Database Empty",
+                "No items in database.\n\nLoad a CSV file to add items.",
+            )
+            return
+
+        # Create a new window
+        view_window = tk.Toplevel(self.root)
+        view_window.title("Item Database")
+        view_window.geometry("700x400")
+        view_window.attributes("-topmost", True)
+
+        # Create treeview with scrollbar
+        tree_frame = ttk.Frame(view_window)
+        tree_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        v_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical")
+        v_scrollbar.pack(side="right", fill="y")
+
+        h_scrollbar = ttk.Scrollbar(tree_frame, orient="horizontal")
+        h_scrollbar.pack(side="bottom", fill="x")
+
+        tree = ttk.Treeview(
+            tree_frame,
+            columns=("name", "action", "recycle_for", "keep_for"),
+            show="headings",
+            yscrollcommand=v_scrollbar.set,
+            xscrollcommand=h_scrollbar.set,
+        )
+        tree.pack(fill="both", expand=True)
+
+        v_scrollbar.config(command=tree.yview)
+        h_scrollbar.config(command=tree.xview)
+
+        # Configure columns
+        tree.heading("name", text="Item Name")
+        tree.heading("action", text="Action")
+        tree.heading("recycle_for", text="Recycle For")
+        tree.heading("keep_for", text="Keep For")
+
+        tree.column("name", width=200, minwidth=100)
+        tree.column("action", width=80, minwidth=60)
+        tree.column("recycle_for", width=180, minwidth=100)
+        tree.column("keep_for", width=180, minwidth=100)
+
+        # Add items
+        for item in items:
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    item.name,
+                    item.action,
+                    item.recycle_for or "",
+                    item.keep_for or "",
+                ),
+            )
+
+        # Bottom frame
+        bottom_frame = ttk.Frame(view_window)
+        bottom_frame.pack(fill="x", padx=10, pady=10)
+
+        ttk.Label(bottom_frame, text=f"Total items: {len(items)}").pack(side="left")
+
+        ttk.Button(bottom_frame, text="Close", command=view_window.destroy).pack(
+            side="right"
+        )
+
+    def _clear_database(self) -> None:
+        """Clear all items from the database."""
+        count = self.db.count()
+
+        if count == 0:
+            messagebox.showinfo("Database Empty", "Database is already empty.")
+            return
+
+        confirm = messagebox.askyesno(
+            "Confirm Clear",
+            f"Are you sure you want to delete all {count} items?\n\n"
+            "This cannot be undone.",
+        )
+
+        if confirm:
+            self.db.clear()
+            self._update_item_count()
+            messagebox.showinfo("Cleared", "Database cleared successfully.")
+
+    # =========================================================================
+    # Window Management
+    # =========================================================================
+
     def run(self) -> None:
         """Start the calibration tool."""
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.mainloop()
 
-        # Cleanup overlays on exit
+    def _on_close(self) -> None:
+        """Handle window close."""
         self.trigger_selector.hide_overlay()
+        self.trigger_selector2.hide_overlay()
         self.tooltip_selector.hide_overlay()
+        self.root.destroy()
 
 
 def main() -> None:

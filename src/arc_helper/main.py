@@ -15,6 +15,7 @@ from threading import Thread
 from dotenv import load_dotenv
 
 from arc_helper.config import get_settings
+from arc_helper.config import logger
 from arc_helper.config import reload_settings
 from arc_helper.database import Database
 from arc_helper.database import Item
@@ -121,7 +122,7 @@ class Scanner:
         self.state = ScannerState.IDLE
         self._scan_thread = Thread(target=self._scan_loop, daemon=True)
         self._scan_thread.start()
-        print("Scanner started")
+        logger.info("Scanner started")
 
     def stop(self) -> None:
         """Stop the scanner."""
@@ -129,7 +130,7 @@ class Scanner:
         self.state = ScannerState.STOPPED
         if self._scan_thread:
             self._scan_thread.join(timeout=2.0)
-        print("Scanner stopped")
+        logger.info("Scanner stopped")
 
     def pause(self) -> None:
         """Pause scanning."""
@@ -163,7 +164,7 @@ class Scanner:
                         # Trigger detected! Switch to active mode
                         self.state = ScannerState.ACTIVE
                         self._update_status("active")
-                        print("INVENTORY detected - activating tooltip scanner")
+                        logger.info("INVENTORY detected - activating tooltip scanner")
                     else:
                         # Wait before next trigger scan
                         time.sleep(settings.scan.trigger_scan_interval)
@@ -179,7 +180,7 @@ class Scanner:
                         # Inventory closed, go back to idle
                         self.state = ScannerState.IDLE
                         self._update_status("scanning")
-                        print("INVENTORY closed - returning to idle")
+                        logger.info("INVENTORY closed - returning to idle")
                         continue
 
                     # Scan tooltip at cursor position
@@ -193,7 +194,7 @@ class Scanner:
                     time.sleep(settings.scan.tooltip_scan_interval)
 
             except Exception as e:
-                print(f"Scanner error: {e}")
+                logger.error(f"Scanner error: {e}")
                 self._update_status("error")
                 time.sleep(1.0)  # Back off on error
 
@@ -218,9 +219,9 @@ class Scanner:
 
         if recommendation:
             self.stats.items_found_in_db += 1
-            print(f"Found: {item_name} → {recommendation.action}")
+            logger.debug(f"Found: {item_name} → {recommendation.action}")
         else:
-            print(f"Unknown item: {item_name}")
+            logger.debug(f"Unknown item: {item_name}")
 
         # Show overlay (must be done on main thread)
         self._show_overlay(item_name, recommendation)
@@ -284,33 +285,37 @@ class Application:
 
     def run(self) -> None:
         """Start the application."""
-        print("=" * 50)
-        print("Arc Raiders Helper - Started")
-        print("=" * 50)
-        print(f"Database: {self.db.count()} items loaded")
-        print(f"Debug mode: {self.settings.debug_mode}")
-        print("=" * 50)
-        print("Trigger Region:")
-        print(
+        logger.info("=" * 50)
+        logger.info("Arc Raiders Helper - Started")
+        logger.info("=" * 50)
+        logger.info(f"Database: {self.db.count()} items loaded")
+        logger.info(f"Debug mode: {self.settings.debug_mode}")
+        logger.info("=" * 50)
+        logger.info("Trigger Region:")
+        logger.info(
             f"  Position: ({self.settings.trigger_region.x}, {self.settings.trigger_region.y})"
         )
-        print(
+        logger.info(
             f"  Size: {self.settings.trigger_region.width}x{self.settings.trigger_region.height}"
         )
-        print("Trigger Region 2:")
-        print(
+        logger.info("Trigger Region 2:")
+        logger.info(
             f"  Position: ({self.settings.trigger_region2.x}, {self.settings.trigger_region2.y})"
         )
-        print(
+        logger.info(
             f"  Size: {self.settings.trigger_region2.width}x{self.settings.trigger_region2.height}"
         )
-        print("=" * 50)
-        print(f"Trigger scan interval: {self.settings.scan.trigger_scan_interval}s")
-        print(f"Tooltip scan interval: {self.settings.scan.tooltip_scan_interval}s")
-        print("=" * 50)
-        print("Looking for INVENTORY screen...")
-        print("Press Ctrl+C in terminal to quit")
-        print("=" * 50)
+        logger.info("=" * 50)
+        logger.info(
+            f"Trigger scan interval: {self.settings.scan.trigger_scan_interval}s"
+        )
+        logger.info(
+            f"Tooltip scan interval: {self.settings.scan.tooltip_scan_interval}s"
+        )
+        logger.info("=" * 50)
+        logger.info("Looking for INVENTORY screen...")
+        logger.info("Press Ctrl+C in terminal to quit")
+        logger.info("=" * 50)
 
         # Start scanner
         self.scanner.start()
@@ -323,14 +328,52 @@ class Application:
 
     def quit(self) -> None:
         """Clean shutdown."""
-        print("\nShutting down...")
+        logger.info("\nShutting down...")
         self.scanner.stop()
         self.root.quit()
         self.root.destroy()
 
 
+def check_first_run() -> bool:
+    """
+    Check if this is a first run or uncalibrated state.
+
+    Returns True if ready to run, False if calibration needed.
+    """
+    from arc_helper.resolution_profiles import get_profile_manager
+
+    profile_manager = get_profile_manager()
+    resolution = profile_manager.get_resolution_key()
+
+    # Check if current settings are uncalibrated
+    if profile_manager.is_uncalibrated():
+        logger.info(f"Detected resolution: {resolution}")
+
+        # Try to apply a known profile
+        if profile_manager.has_profile():
+            logger.info(f"Found profile for {resolution}, applying...")
+            profile_manager.apply_profile()
+            logger.info("Profile applied successfully!")
+            return True
+        # No profile available
+        supported = profile_manager.get_supported_resolutions()
+        logger.warning(f"\nNo pre-configured profile found for {resolution}.")
+        logger.warning(
+            f"Supported resolutions: {', '.join(supported) if supported else 'None yet'}"
+        )
+        logger.warning("\nPlease run the Calibration tool (Calibrate.exe) to configure")
+        logger.warning("the screen regions for your resolution.")
+        return False
+
+    return True
+
+
 def main() -> None:
-    """Entry point."""
+    """Entry point for Arc Raiders Helper."""
+    # Check first run / calibration status
+    if not check_first_run():
+        input("\nPress Enter to exit...")
+        return
     app = Application()
     app.run()
 

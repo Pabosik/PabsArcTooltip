@@ -90,14 +90,6 @@ class Database:
             cursor = conn.execute("SELECT COUNT(*) FROM items")
             return cursor.fetchone()[0]
 
-    def clear(self) -> int:
-        """Clear all items from database. Returns count of deleted items."""
-        with self._get_connection() as conn:
-            cursor = conn.execute("DELETE FROM items")
-            count = cursor.rowcount
-            conn.commit()
-            return count
-
     def load_csv(self, csv_path: Path, clear_existing: bool = True) -> int:
         """
         Load items from a CSV file into the database.
@@ -111,6 +103,7 @@ class Database:
         Returns:
             Number of items loaded
         """
+        csv_path = Path(csv_path)
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
 
@@ -119,7 +112,7 @@ class Database:
 
         count = 0
         with self._get_connection() as conn:
-            with open(csv_path, encoding="utf-8") as f:
+            with Path(csv_path).open(encoding="utf-8") as f:
                 reader = csv.DictReader(f)
 
                 for row in reader:
@@ -157,6 +150,29 @@ class Database:
             recycle_for=row["recycle_for"],
             keep_for=row["keep_for"],
         )
+
+    def get_all_items(self) -> list[Item]:
+        """Get all items from the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT name, action, recycle_for, keep_for FROM items ORDER BY name"
+            )
+            return [
+                Item(
+                    name=row["name"],
+                    action=row["action"],
+                    recycle_for=row["recycle_for"],
+                    keep_for=row["keep_for"],
+                )
+                for row in cursor.fetchall()
+            ]
+
+    def clear(self) -> None:
+        """Delete all items from the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM items")
+            conn.commit()
 
 
 def get_database() -> Database:

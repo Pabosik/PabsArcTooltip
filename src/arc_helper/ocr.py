@@ -13,8 +13,9 @@ from PIL import ImageGrab
 from PIL import ImageOps
 from pydantic import BaseModel
 
-from .config import Region
+from .config import RegionMixin
 from .config import get_settings
+from .config import logger
 
 
 class Point(BaseModel):
@@ -69,7 +70,8 @@ class OCREngine:
         if self.debug_mode:
             self.debug_dir.mkdir(parents=True, exist_ok=True)
 
-    def capture_region(self, region: Region) -> Image.Image:
+    @staticmethod
+    def capture_region(region: RegionMixin) -> Image.Image:
         """Capture a screen region."""
         return ImageGrab.grab(bbox=region.bbox)
 
@@ -89,17 +91,15 @@ class OCREngine:
         image = ImageGrab.grab(bbox=(left, top, right, bottom))
         return image, cursor
 
-    def check_trigger_any(self, regions: list[Region]) -> bool:
+    def check_trigger_any(self, regions: list[RegionMixin]) -> bool:
         """
         Check if the trigger word (INVENTORY) is visible in any of the regions.
         """
-        for region in regions:
-            if self.check_trigger(region):
-                return True
-        return False
+        return any(self.check_trigger(region) for region in regions)
 
+    @staticmethod
     def preprocess_for_ocr(
-        self, image: Image.Image, invert: bool = True, scale: int = 2
+        image: Image.Image, invert: bool = True, scale: int = 2
     ) -> Image.Image:
         """
         Preprocess image for better OCR accuracy.
@@ -294,20 +294,20 @@ class OCREngine:
 
         except pytesseract.TesseractError as e:
             if self.debug_mode:
-                print(f"OCR Error: {e}")
+                logger.error(f"OCR Error: {e}")
             return OCRResult(text=None, confidence=0, raw_text="")
 
-    def _clean_text(self, text: str) -> str:
+    @staticmethod
+    def _clean_text(text: str) -> str:
         """Clean OCR output text."""
         # Remove common OCR artifacts
         text = re.sub(r"[|\\/_]", "", text)
         # Normalize whitespace
         text = re.sub(r"\s+", " ", text)
         # Strip
-        text = text.strip()
-        return text
+        return text.strip()
 
-    def check_trigger(self, region: Region) -> bool:
+    def check_trigger(self, region: RegionMixin) -> bool:
         """
         Check if the trigger word (INVENTORY) is visible in the region.
 
@@ -347,7 +347,7 @@ class OCREngine:
         Returns the cleaned item name or None if extraction fails.
         """
         # Capture around cursor
-        image, cursor = self.capture_around_cursor()
+        image, _ = self.capture_around_cursor()
 
         # Save debug image if enabled
         if self.debug_mode:
@@ -374,20 +374,17 @@ class OCREngine:
             # Use PSM 6 for block of text, then parse out the item name
             text = pytesseract.image_to_string(processed, config="--psm 6")
 
-            if self.debug_mode:
-                print(f"Raw tooltip OCR:\n{text}")
+            logger.debug(f"Raw tooltip OCR:\n{text}")
 
             # Parse the text to find the item name
             item_name = self._parse_item_name_from_tooltip(text)
 
             if item_name:
-                if self.debug_mode:
-                    print(f"Extracted item name: '{item_name}'")
+                logger.debug(f"Extracted item name: '{item_name}'")
                 return item_name
 
         except pytesseract.TesseractError as e:
-            if self.debug_mode:
-                print(f"OCR Error: {e}")
+            logger.error(f"OCR Error: {e}")
 
         return None
 
@@ -436,7 +433,7 @@ class OCREngine:
 
         return None
 
-    def extract_item_name(self, region: Region) -> str | None:
+    def extract_item_name(self, region: RegionMixin) -> str | None:
         """
         Legacy method - extract item name from a fixed region.
         Kept for calibration tool compatibility.
@@ -452,11 +449,11 @@ class OCREngine:
             text = pytesseract.image_to_string(processed, config="--psm 6")
             return self._parse_item_name_from_tooltip(text)
         except pytesseract.TesseractError as e:
-            if self.debug_mode:
-                print(f"OCR Error: {e}")
+            logger.error(f"OCR Error: {e}")
             return None
 
-    def _fuzzy_match(self, text: str, target: str, threshold: float = 0.7) -> bool:
+    @staticmethod
+    def _fuzzy_match(text: str, target: str, threshold: float = 0.7) -> bool:
         """
         Check if text approximately matches target.
         Uses simple character overlap ratio.
@@ -476,13 +473,24 @@ class OCREngine:
         return overlap >= threshold
 
 
-# Singleton instance
-_ocr_engine: OCREngine | None = None
+class OCREngineManager:
+    """Manages the singleton OCREngine instance."""
+
+    _instance: OCREngine | None = None
+
+    @classmethod
+    def get(cls) -> OCREngine:
+        """Get the OCR engine instance, creating it if needed."""
+        if cls._instance is None:
+            cls._instance = OCREngine()
+        return cls._instance
+
+    @classmethod
+    def reset(cls) -> None:
+        """Reset the singleton (mainly for testing or reloading settings)."""
+        cls._instance = None
 
 
 def get_ocr_engine() -> OCREngine:
     """Get the singleton OCR engine instance."""
-    global _ocr_engine
-    if _ocr_engine is None:
-        _ocr_engine = OCREngine()
-    return _ocr_engine
+    return OCREngineManager.get()
