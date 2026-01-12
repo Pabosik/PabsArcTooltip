@@ -20,6 +20,7 @@ from arc_helper.config import TooltipRegion
 from arc_helper.config import TriggerRegion
 from arc_helper.config import TriggerRegion2
 from arc_helper.config import get_settings
+from arc_helper.config import logger
 from arc_helper.database import get_database
 from arc_helper.ocr import get_ocr_engine
 
@@ -519,7 +520,11 @@ class CalibrationTool:
     def _test_region_for_inventory(self, selector: RegionSelector) -> None:
         """Test a region for INVENTORY text."""
         bbox = selector.get_bbox()
+        logger.info(f"Testing bbox: {bbox}")  # Debug
+
         image = ImageGrab.grab(bbox=bbox)
+        logger.info(f"Captured image: {image.size}, mode: {image.mode}")  # Debug
+
         self._show_preview(image)
 
         region = TempRegion(
@@ -528,8 +533,12 @@ class CalibrationTool:
             selector.width.get(),
             selector.height.get(),
         )
+        logger.info(
+            f"Region: x={region.x}, y={region.y}, w={region.width}, h={region.height}"
+        )  # Debug
 
         found = self.ocr.check_trigger(region)
+        logger.info(f"Trigger found: {found}")  # Debug
 
         if found:
             self.result_label.config(text="✓ INVENTORY detected!", foreground="green")
@@ -573,23 +582,35 @@ class CalibrationTool:
 
     def _test_tooltip_at_cursor(self) -> None:
         """Test OCR on tooltip at current cursor position."""
+        logger.info("Testing tooltip at cursor...")  # Debug
+
         result = self.tooltip_capture.capture_at_cursor()
 
         if result is None:
+            logger.info("Failed to capture")  # Debug
             self.result_label.config(text="✗ Failed to capture", foreground="red")
+            self.root.update()
             return
 
         image, cursor_x, cursor_y = result
+        logger.info(
+            f"Captured at cursor ({cursor_x}, {cursor_y}), image size: {image.size}"
+        )  # Debug
+
         self._show_preview(image)
 
         # Use the OCR engine's tooltip preprocessing
         processed = self.ocr.preprocess_tooltip(image)
+        logger.info(f"Preprocessed image size: {processed.size}")  # Debug
 
         try:
             import pytesseract
 
             text = pytesseract.image_to_string(processed, config="--psm 6")
+            logger.info(f"Raw OCR text: {text!r}")  # Debug
+
             item_name = self.ocr._parse_item_name_from_tooltip(text)
+            logger.info(f"Parsed item name: {item_name}")  # Debug
 
             if item_name:
                 self.result_label.config(
@@ -600,7 +621,10 @@ class CalibrationTool:
                     text="✗ No item name detected", foreground="red"
                 )
         except Exception as e:
+            logger.info(f"OCR Error: {e}")  # Debug
             self.result_label.config(text=f"✗ OCR Error: {e}", foreground="red")
+
+        self.root.update()  # Force UI update
 
     # =========================================================================
     # Configuration Methods

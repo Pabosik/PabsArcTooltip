@@ -73,7 +73,8 @@ def build():
     logger.info("Copying configuration files...")
     shutil.copy(ROOT / ".env.example", OUTPUT / ".env.example")
     shutil.copy(ROOT / ".env.example", OUTPUT / ".env")
-    shutil.copy(ROOT / "sample_items.csv", OUTPUT / "sample_items.csv")
+    shutil.copy(ROOT / "items.csv", OUTPUT / "items.csv")
+    shutil.copy(ROOT / "items.db", OUTPUT / "items.db")
     shutil.copy(
         ROOT / "src" / "arc_helper" / "resolutions.json", OUTPUT / "resolutions.json"
     )

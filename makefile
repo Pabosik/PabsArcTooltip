@@ -15,3 +15,6 @@ calibrate:
 
 db_list:
 	uv run arc-db list
+
+winbuild:
+	python build.py
