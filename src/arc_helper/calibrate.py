@@ -538,15 +538,15 @@ class CalibrationTool:
 
     def _test_tooltip(self) -> None:
         """Test OCR on tooltip region."""
-        bbox = self.tooltip_selector.get_bbox()
+        bbox = self.tooltip_capture.get_bbox()
         image = ImageGrab.grab(bbox=bbox)
         self._show_preview(image)
 
         region = TempRegion(
-            self.tooltip_selector.x.get(),
-            self.tooltip_selector.y.get(),
-            self.tooltip_selector.width.get(),
-            self.tooltip_selector.height.get(),
+            self.tooltip_capture.offset_x.get(),
+            self.tooltip_capture.offset_y.get(),
+            self.tooltip_capture.width.get(),
+            self.tooltip_capture.height.get(),
         )
 
         item_name = self.ocr.extract_item_name(region)
@@ -558,6 +558,10 @@ class CalibrationTool:
 
     def _show_preview(self, image) -> None:
         """Show image preview."""
+
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
         display_width = min(350, image.width)
         ratio = display_width / image.width
         display_height = int(image.height * ratio)
