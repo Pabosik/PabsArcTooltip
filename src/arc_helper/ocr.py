@@ -3,7 +3,18 @@ OCR module for Arc Raiders Helper.
 Screen capture and text extraction using Tesseract.
 """
 
+# Enable windows DPI scaling
 import ctypes
+from contextlib import suppress
+
+try:
+    # Windows 10 1607+ (most reliable)
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+except Exception:  # noqa
+    with suppress(Exception):
+        # Fallback for older Windows
+        ctypes.windll.user32.SetProcessDPIAware()
+
 import re
 import string
 
@@ -35,7 +46,10 @@ class OCRResult(BaseModel):
 
 
 def get_cursor_position() -> Point:
-    """Get current cursor position on screen."""
+    """Get current cursor position on screen in physical pixels."""
+
+    # Ensure we're DPI aware to get physical coordinates
+    ctypes.windll.user32.SetProcessDPIAware()
 
     class POINT(ctypes.Structure):
         _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]

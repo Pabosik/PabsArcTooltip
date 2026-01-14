@@ -3,8 +3,20 @@ Overlay UI for Arc Raiders Helper.
 Displays item recommendations as a non-intrusive popup.
 """
 
+# DPI awareness must be set before any GUI operations
+import ctypes
+from contextlib import suppress
+
+try:
+    # Windows 10 1607+ (most reliable)
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+except Exception:  # noqa
+    with suppress(Exception):
+        # Fallback for older Windows
+        ctypes.windll.user32.SetProcessDPIAware()
 import tkinter as tk
 
+from .config import get_dpi_scale
 from .config import get_settings
 from .database import Item
 
@@ -26,6 +38,9 @@ class OverlayWindow:
         """Initialize overlay as a toplevel window."""
         self.root = root
         self.settings = get_settings()
+
+        # Get DPI scale to counteract Windows scaling
+        self.dpi_scale = get_dpi_scale()
 
         # Create toplevel window for overlay
         self.window = tk.Toplevel(root)
@@ -49,16 +64,30 @@ class OverlayWindow:
         # Auto-hide timer ID
         self._hide_after_id: str | None = None
 
+    def _scale(self, value: int) -> int:
+        """Scale a value down to counteract DPI scaling."""
+        return max(1, int(value / self.dpi_scale))
+
     def _setup_ui(self) -> None:
         """Create the overlay UI elements."""
+        # Scale dimensions for padding/borders
+        padx = self._scale(15)
+        pady = self._scale(10)
+        highlight = max(1, self._scale(2))
+
+        # Scale font sizes
+        name_font_size = max(8, self._scale(14))
+        action_font_size = max(10, self._scale(20))
+        notes_font_size = max(6, self._scale(10))
+
         # Main frame with dark background
         self.frame = tk.Frame(
             self.window,
             bg="#1a1a2e",
-            padx=15,
-            pady=10,
+            padx=padx,
+            pady=pady,
             highlightbackground="#4a4a6a",
-            highlightthickness=2,
+            highlightthickness=highlight,
         )
         self.frame.pack()
 
@@ -66,9 +95,10 @@ class OverlayWindow:
         self.name_label = tk.Label(
             self.frame,
             text="Item Name",
-            font=("Segoe UI", 14, "bold"),
+            font=("Segoe UI", name_font_size, "bold"),
             fg="white",
             bg="#1a1a2e",
+            anchor="w",
         )
         self.name_label.pack(anchor="w")
 
@@ -76,23 +106,24 @@ class OverlayWindow:
         self.action_label = tk.Label(
             self.frame,
             text="ACTION",
-            font=("Segoe UI", 20, "bold"),
+            font=("Segoe UI", action_font_size, "bold"),
             fg="#FFD700",
             bg="#1a1a2e",
+            anchor="w",
         )
-        self.action_label.pack(anchor="w", pady=(5, 0))
+        self.action_label.pack(anchor="w", pady=(self._scale(5), 0))
 
-        # Notes label
+        # Notes label - wraplength will be updated dynamically in show()
         self.notes_label = tk.Label(
             self.frame,
             text="",
-            font=("Segoe UI", 10),
+            font=("Segoe UI", notes_font_size),
             fg="#aaaaaa",
             bg="#1a1a2e",
-            wraplength=250,
             justify=tk.LEFT,
+            anchor="w",
         )
-        self.notes_label.pack(anchor="w", pady=(5, 0))
+        self.notes_label.pack(anchor="w", pady=(self._scale(5), 0))
 
     def show(self, item_name: str, recommendation: Item | None) -> None:
         """Show the overlay with item info."""
@@ -126,12 +157,22 @@ class OverlayWindow:
         self.window.deiconify()
         self.window.lift()
 
+        # Update wraplength to match the width of the action label
+        self.window.update_idletasks()  # Force geometry calculation
+        action_width = self.action_label.winfo_width()
+        name_width = self.name_label.winfo_width()
+        max_width = max(action_width, name_width, 200)  # Minimum 200
+        self.notes_label.config(wraplength=max_width)
+
         # Auto-hide after configured time
         hide_ms = int(self.settings.overlay.display_time * 1000)
         self._hide_after_id = self.window.after(hide_ms, self.hide)
 
     def hide(self) -> None:
         """Hide the overlay."""
+        if self._hide_after_id:
+            self.window.after_cancel(self._hide_after_id)
+            self._hide_after_id = None
         self.window.withdraw()
 
     def set_position(self, x: int, y: int) -> None:
@@ -154,6 +195,9 @@ class StatusWindow:
         """Initialize status window."""
         self.root = root
 
+        # Get DPI scale to counteract Windows scaling
+        self.dpi_scale = get_dpi_scale()
+
         # Create toplevel for status
         self.window = tk.Toplevel(root)
         self.window.title("Arc Helper Status")
@@ -165,13 +209,25 @@ class StatusWindow:
         self.window.geometry("+10+10")
 
         # UI
-        self.frame = tk.Frame(self.window, bg="#1a1a2e", padx=8, pady=4)
+        self._setup_ui()
+
+    def _scale(self, value: int) -> int:
+        """Scale a value down to counteract DPI scaling."""
+        return max(1, int(value / self.dpi_scale))
+
+    def _setup_ui(self) -> None:
+        """Create the status UI elements."""
+        padx = self._scale(8)
+        pady = self._scale(4)
+        font_size = max(6, self._scale(9))
+
+        self.frame = tk.Frame(self.window, bg="#1a1a2e", padx=padx, pady=pady)
         self.frame.pack()
 
         self.status_label = tk.Label(
             self.frame,
             text="● Scanning...",
-            font=("Segoe UI", 9),
+            font=("Segoe UI", font_size),
             fg="#888888",
             bg="#1a1a2e",
         )

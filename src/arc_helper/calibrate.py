@@ -3,6 +3,19 @@ Calibration tool for Arc Raiders Helper.
 Helps configure screen regions for trigger and tooltip detection.
 """
 
+# Enable windows DPI scaling
+import ctypes
+from contextlib import suppress
+
+try:
+    # Windows 10 1607+ (most reliable)
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+except Exception:  # noqa
+    with suppress(Exception):
+        # Fallback for older Windows
+        ctypes.windll.user32.SetProcessDPIAware()
+
+
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog

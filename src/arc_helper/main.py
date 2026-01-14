@@ -3,6 +3,19 @@ Arc Raiders Helper - Main Application.
 Coordinates OCR scanning and overlay display.
 """
 
+# Enable windows DPI scaling
+import ctypes
+from contextlib import suppress
+
+try:
+    # Windows 10 1607+ (most reliable)
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+except Exception:  # noqa
+    with suppress(Exception):
+        # Fallback for older Windows
+        ctypes.windll.user32.SetProcessDPIAware()
+
+
 import time
 import tkinter as tk
 from dataclasses import dataclass

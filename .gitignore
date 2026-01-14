@@ -3,10 +3,12 @@ tmp
 __pycache__/
 *.py[oc]
 debug
-.env
+.env*
 
 .claude
 .vscode
 build
 dist
 *.log
+
+!.env.example

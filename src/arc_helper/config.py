@@ -28,12 +28,45 @@ APP_DIR = get_app_dir()
 
 
 def get_screen_resolution() -> tuple[int, int]:
-    """Get the primary monitor resolution."""
+    """Get the primary monitor resolution in physical pixels."""
     user32 = ctypes.windll.user32
-    user32.SetProcessDPIAware()
+    user32.SetProcessDPIAware()  # This makes us get physical pixels
     width = user32.GetSystemMetrics(0)
     height = user32.GetSystemMetrics(1)
     return width, height
+
+
+def get_dpi_scale() -> float:
+    """Get the current DPI scaling factor (e.g., 1.0, 1.5, 2.0, 3.0)."""
+    try:
+        # Get the DPI for the primary monitor
+        user32 = ctypes.windll.user32
+        user32.SetProcessDPIAware()
+
+        # Get DC for the screen
+        hdc = user32.GetDC(0)
+        gdi32 = ctypes.windll.gdi32
+
+        # LOGPIXELSX = 88, standard DPI is 96
+        dpi = gdi32.GetDeviceCaps(hdc, 88)
+        user32.ReleaseDC(0, hdc)
+
+        return dpi / 96.0
+    except Exception:
+        return 1.0
+
+
+def scale_for_dpi(value: int) -> int:
+    """Scale a logical value to physical pixels."""
+    return int(value * get_dpi_scale())
+
+
+def unscale_from_dpi(value: int) -> int:
+    """Convert physical pixels to logical value."""
+    scale = get_dpi_scale()
+    if scale == 0:
+        return value
+    return int(value / scale)
 
 
 def get_tesseract_path() -> str | None:
