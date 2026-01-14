@@ -19,6 +19,7 @@ from arc_helper.config import Settings
 from arc_helper.config import TooltipRegion
 from arc_helper.config import TriggerRegion
 from arc_helper.config import TriggerRegion2
+from arc_helper.config import get_screen_resolution
 from arc_helper.config import get_settings
 from arc_helper.config import logger
 from arc_helper.database import get_database
@@ -61,10 +62,10 @@ class RegionSelector:
 
         # Grid of sliders
         sliders = [
-            ("X", self.x, 0, 2500),
-            ("Y", self.y, 0, 1500),
+            ("X", self.x, 0, 3000),
+            ("Y", self.y, 0, 2000),
             ("Width", self.width, 20, 800),
-            ("Height", self.height, 20, 300),
+            ("Height", self.height, 10, 300),
         ]
 
         for row, (label, var, min_val, max_val) in enumerate(sliders):
@@ -168,10 +169,10 @@ class TooltipCaptureConfig:
 
         # Grid of sliders
         sliders = [
-            ("Width", self.width, 100, 800),
-            ("Height", self.height, 100, 800),
-            ("Offset X", self.offset_x, -500, 500),
-            ("Offset Y", self.offset_y, -800, 200),
+            ("Width", self.width, 100, 1200),
+            ("Height", self.height, 100, 1200),
+            ("Offset X", self.offset_x, -1200, 800),
+            ("Offset Y", self.offset_y, -1200, -100),
         ]
 
         for row, (label, var, min_val, max_val) in enumerate(sliders, start=1):
@@ -235,18 +236,29 @@ class TooltipCaptureConfig:
         if not self.overlay or not self.overlay.winfo_exists():
             return
 
-        # Get cursor position
         try:
             x = self.overlay.winfo_pointerx()
             y = self.overlay.winfo_pointery()
         except tk.TclError:
             return
 
-        # Apply offset
-        left = x + self.offset_x.get()
+        # TODO: uncomment the following once correct percentages
+        # for screen thresholds have been found and implemented.
+        # screen_width, _ = get_screen_resolution()
+
+        # Check if cursor is in right 30% of screen
+        # right_threshold = screen_width * 0.7
+
+        # if x > right_threshold:
+        #     # Flip X offset (and account for capture width)
+        #     offset_x = -self.offset_x.get() - self.width.get()
+        # else:
+        #     offset_x = self.offset_x.get()
+        offset_x = self.offset_x.get()
+
+        left = x + offset_x
         top = y + self.offset_y.get()
 
-        # Update overlay
         self.overlay.geometry(f"{self.width.get()}x{self.height.get()}+{left}+{top}")
 
     def stop_tracking(self) -> None:
@@ -262,21 +274,31 @@ class TooltipCaptureConfig:
 
     def capture_at_cursor(self) -> tuple[ImageGrab.Image, int, int] | None:
         """Capture the area at current cursor position."""
+
         try:
-            # Get cursor position using tkinter
             root = self.parent.winfo_toplevel()
             cursor_x = root.winfo_pointerx()
             cursor_y = root.winfo_pointery()
         except tk.TclError:
             return None
 
+        screen_width, _ = get_screen_resolution()
+
+        # Check if cursor is in right 30% of screen
+        right_threshold = screen_width * 0.7
+
+        if cursor_x > right_threshold:
+            # Flip X offset (and account for capture width)
+            offset_x = -self.offset_x.get() - self.width.get()
+        else:
+            offset_x = self.offset_x.get()
+
         # Calculate capture region
-        left = max(0, cursor_x + self.offset_x.get())
+        left = max(0, cursor_x + offset_x)
         top = max(0, cursor_y + self.offset_y.get())
         right = left + self.width.get()
         bottom = top + self.height.get()
 
-        # Capture
         image = ImageGrab.grab(bbox=(left, top, right, bottom))
         return image, cursor_x, cursor_y
 

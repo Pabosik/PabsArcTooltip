@@ -21,9 +21,9 @@
     },
     "3840x2160": {
       "name": "4K UHD (16:9) 3840x2160",
-      "trigger_region": {"x": null, "y": null, "width": null, "height": null},
-      "trigger_region2": {"x": null, "y": null, "width": null, "height": null},
-      "tooltip_capture": {"width": null, "height": null, "offset_x": null, "offset_y": null}
+      "trigger_region": {"x": 1523, "y": 46, "width": 236, "height": 35},
+      "trigger_region2": {"x": 1301, "y": 66, "width": 244, "height": 40},
+      "tooltip_capture": {"width": 850, "height": 928, "offset_x": 63, "offset_y": -983}
     },
     "2560x1080": {
       "name": "Ultrawide FHD (21:9) 2560x1080",

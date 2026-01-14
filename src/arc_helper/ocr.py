@@ -14,6 +14,7 @@ from PIL import ImageOps
 from pydantic import BaseModel
 
 from .config import RegionMixin
+from .config import get_screen_resolution  # noqa
 from .config import get_settings
 from .config import logger
 
@@ -79,11 +80,28 @@ class OCREngine:
         """
         Capture a region around the current cursor position.
         Returns the captured image and the cursor position.
+
+        If cursor is in the right 30% of the screen, the X offset is flipped
+        to capture the tooltip on the left side instead.
         """
+
         cursor = get_cursor_position()
+        # TODO: uncomment the following once correct percentages
+        # for screen thresholds have been found and implemented.
+        # screen_width, _ = get_screen_resolution()
+
+        # # Check if cursor is in right 30% of screen
+        # right_threshold = screen_width * 0.7
+
+        # if cursor.x > right_threshold:
+        #     # Flip X offset (and account for capture width)
+        #     offset_x = -self.tooltip_offset_x - self.tooltip_width
+        # else:
+        #     offset_x = self.tooltip_offset_x
+        offset_x = self.tooltip_offset_x
 
         # Calculate capture region around cursor
-        left = max(0, cursor.x + self.tooltip_offset_x)
+        left = max(0, cursor.x + offset_x)
         top = max(0, cursor.y + self.tooltip_offset_y)
         right = left + self.tooltip_width
         bottom = top + self.tooltip_height
