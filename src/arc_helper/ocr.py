@@ -25,7 +25,7 @@ from PIL import ImageOps
 from pydantic import BaseModel
 
 from .config import RegionMixin
-from .config import get_screen_resolution  # noqa
+from .config import get_screen_resolution
 from .config import get_settings
 from .config import logger
 
@@ -88,7 +88,14 @@ class OCREngine:
     @staticmethod
     def capture_region(region: RegionMixin) -> Image.Image:
         """Capture a screen region."""
-        return ImageGrab.grab(bbox=region.bbox)
+        try:
+            return ImageGrab.grab(bbox=region.bbox)
+        except Exception as e:
+            from .config import logger
+
+            logger.error(f"Screen grab failed for region {region.bbox}: {e}")
+            # Return a dummy image to avoid crashing
+            return Image.new("RGB", (region.width, region.height), color="black")
 
     def capture_around_cursor(self) -> tuple[Image.Image, Point]:
         """
@@ -100,27 +107,52 @@ class OCREngine:
         """
 
         cursor = get_cursor_position()
-        # TODO: uncomment the following once correct percentages
-        # for screen thresholds have been found and implemented.
-        # screen_width, _ = get_screen_resolution()
+        screen_width, screen_height = get_screen_resolution()
 
-        # # Check if cursor is in right 30% of screen
-        # right_threshold = screen_width * 0.7
+        # Check if cursor is in right 30% of screen
+        right_threshold = screen_width * 0.7
 
-        # if cursor.x > right_threshold:
-        #     # Flip X offset (and account for capture width)
-        #     offset_x = -self.tooltip_offset_x - self.tooltip_width
-        # else:
-        #     offset_x = self.tooltip_offset_x
-        offset_x = self.tooltip_offset_x
+        if cursor.x > right_threshold:
+            # Flip X offset (and account for capture width)
+            offset_x = -self.tooltip_offset_x - self.tooltip_width
+        else:
+            offset_x = self.tooltip_offset_x
 
         # Calculate capture region around cursor
-        left = max(0, cursor.x + offset_x)
-        top = max(0, cursor.y + self.tooltip_offset_y)
+        left = cursor.x + offset_x
+        top = cursor.y + self.tooltip_offset_y
         right = left + self.tooltip_width
         bottom = top + self.tooltip_height
 
-        image = ImageGrab.grab(bbox=(left, top, right, bottom))
+        # Clamp to valid screen coordinates (handle multi-monitor)
+        # Note: We clamp to primary monitor bounds for simplicity
+        left = max(0, min(left, screen_width - 1))
+        top = max(0, min(top, screen_height - 1))
+        right = max(left + 1, min(right, screen_width))
+        bottom = max(top + 1, min(bottom, screen_height))
+
+        # Log if we had to clamp significantly
+        if (
+            right - left < self.tooltip_width // 2
+            or bottom - top < self.tooltip_height // 2
+        ):
+            from .config import logger
+
+            logger.debug(
+                f"Capture region clamped significantly: cursor=({cursor.x}, {cursor.y}), bbox=({left}, {top}, {right}, {bottom})"
+            )
+
+        try:
+            image = ImageGrab.grab(bbox=(left, top, right, bottom))
+        except Exception as e:
+            from .config import logger
+
+            logger.error(
+                f"Screen grab failed at bbox ({left}, {top}, {right}, {bottom}): {e}"
+            )
+            # Return a dummy image to avoid crashing
+            return Image.new("RGB", (100, 100), color="black"), cursor
+
         return image, cursor
 
     def check_trigger_any(self, regions: list[RegionMixin]) -> bool:
