@@ -109,14 +109,17 @@ class OCREngine:
         cursor = get_cursor_position()
         screen_width, screen_height = get_screen_resolution()
 
-        # Check if cursor is in right 30% of screen
-        right_threshold = screen_width * 0.7
+        # TODO: flipping the tooltip region on the right side of screen
+        # to be implemented properly
+        # # Check if cursor is in right 30% of screen
+        # right_threshold = screen_width * 0.7
 
-        if cursor.x > right_threshold:
-            # Flip X offset (and account for capture width)
-            offset_x = -self.tooltip_offset_x - self.tooltip_width
-        else:
-            offset_x = self.tooltip_offset_x
+        # if cursor.x > right_threshold:
+        #     # Flip X offset (and account for capture width)
+        #     offset_x = -self.tooltip_offset_x - self.tooltip_width
+        # else:
+        #     offset_x = self.tooltip_offset_x
+        offset_x = self.tooltip_offset_x
 
         # Calculate capture region around cursor
         left = cursor.x + offset_x

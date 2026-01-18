@@ -16,8 +16,10 @@ except Exception:  # noqa
         ctypes.windll.user32.SetProcessDPIAware()
 
 
+import sys
 import time
 import tkinter as tk
+import traceback
 from dataclasses import dataclass
 from dataclasses import field
 from enum import Enum
@@ -27,6 +29,7 @@ from threading import Thread
 
 from dotenv import load_dotenv
 
+from arc_helper.config import APP_DIR
 from arc_helper.config import SettingsManager
 from arc_helper.config import get_settings
 from arc_helper.config import logger
@@ -392,29 +395,69 @@ def check_first_run() -> bool:
 
 def main() -> None:
     """Entry point for Arc Raiders Helper."""
-    # Check first run / calibration status
-    if not check_first_run():
-        input("\nPress Enter to exit...")
-        return
 
-    # NOW get settings - after potential profile application
-    settings = get_settings()
+    # Log any unhandled exception before exit
+    def exception_hook(exc_type, exc_value, exc_tb):
+        logger.error("=" * 50)
+        logger.error("UNHANDLED EXCEPTION - APP CRASHING")
+        logger.error("=" * 50)
+        logger.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+        # Also write to a crash log file
+        crash_log = APP_DIR / "crash.log"
+        Path(crash_log).write_text(
+            "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        )
+        logger.error(f"Crash log written to: {crash_log}")
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
 
-    # Log the settings
-    logger.info("Settings loaded:")
-    logger.info("Trigger Region:")
-    logger.info(
-        f"  Position: ({settings.trigger_region.x}, {settings.trigger_region.y})"
-    )
-    logger.info(
-        f"  Size: {settings.trigger_region.width}x{settings.trigger_region.height}"
-    )
-    # ... rest of logging
+    sys.excepthook = exception_hook
 
-    # Initialize OCR engine AFTER settings are finalized
-    _ = get_ocr_engine()
-    app = Application()
-    app.run()
+    # Also catch thread exceptions (Python 3.8+)
+    import threading
+
+    def thread_exception_hook(args):
+        logger.error("=" * 50)
+        logger.error(f"THREAD EXCEPTION in {args.thread.name}")
+        logger.error("=" * 50)
+        logger.error(
+            "".join(
+                traceback.format_exception(
+                    args.exc_type, args.exc_value, args.exc_traceback
+                )
+            )
+        )
+        crash_log = APP_DIR / "crash.log"
+        with Path(crash_log).open("a") as f:
+            f.write(f"\n\nTHREAD {args.thread.name}:\n")
+            f.write(
+                "".join(
+                    traceback.format_exception(
+                        args.exc_type, args.exc_value, args.exc_traceback
+                    )
+                )
+            )
+
+    threading.excepthook = thread_exception_hook
+
+    try:
+        # Check first run / calibration status
+        if not check_first_run():
+            input("\nPress Enter to exit...")
+            return
+
+        settings = get_settings()
+        logger.info(
+            f"Settings loaded for resolution, trigger at ({settings.trigger_region.x}, {settings.trigger_region.y})"
+        )
+
+        _ = get_ocr_engine()
+        app = Application()
+        app.run()
+
+    except Exception as e:
+        logger.error(f"Fatal error in main: {e}")
+        logger.error(traceback.format_exc())
+        input("\nPress Enter to exit after error...")
 
 
 if __name__ == "__main__":

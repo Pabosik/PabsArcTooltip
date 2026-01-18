@@ -297,14 +297,16 @@ class TooltipCaptureConfig:
 
         screen_width, _ = get_screen_resolution()
 
+        # TODO: tooltip flipping on right side of screen, to be implemented properly
         # Check if cursor is in right 30% of screen
-        right_threshold = screen_width * 0.7
+        # right_threshold = screen_width * 0.7
 
-        if cursor_x > right_threshold:
-            # Flip X offset (and account for capture width)
-            offset_x = -self.offset_x.get() - self.width.get()
-        else:
-            offset_x = self.offset_x.get()
+        # if cursor_x > right_threshold:
+        #     # Flip X offset (and account for capture width)
+        #     offset_x = -self.offset_x.get() - self.width.get()
+        # else:
+        #     offset_x = self.offset_x.get()
+        offset_x = self.offset_x.get()
 
         # Calculate capture region
         left = max(0, cursor_x + offset_x)

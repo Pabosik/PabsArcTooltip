@@ -2,6 +2,9 @@
 
 A screen overlay tool that helps you manage your inventory in Arc Raiders by automatically detecting items and displaying recommended actions (keep, recycle, etc.).
 
+![Example 1](static/screen_01.png)
+![Example 2](static/screen_02.png)
+
 A video of how the tool works:
 - TODO: add youtube link
 
