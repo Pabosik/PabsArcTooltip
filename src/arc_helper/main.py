@@ -125,6 +125,7 @@ class Scanner:
     # Cooldown tracking
     _last_shown_item: str = ""
     _last_shown_time: float = 0
+    _trigger_check_counter: int = 0
 
     # Thread control
     _running: bool = False
@@ -191,7 +192,11 @@ class Scanner:
                 # Phase 2: Active mode - scan tooltip
                 elif self.state == ScannerState.ACTIVE:
                     # First, verify trigger is still present
-                    if not ocr.check_trigger_any(
+                    # Optimization: Only check trigger every 3rd scan to save CPU
+                    self._trigger_check_counter += 1
+                    should_check_trigger = self._trigger_check_counter % 3 == 0
+
+                    if should_check_trigger and not ocr.check_trigger_any(
                         [settings.trigger_region, settings.trigger_region2]
                     ):
                         # Inventory closed, go back to idle

@@ -182,7 +182,7 @@ class OCREngine:
         # Upscale for better OCR
         if scale > 1:
             new_size = (gray.width * scale, gray.height * scale)
-            gray = gray.resize(new_size, Image.Resampling.LANCZOS)
+            gray = gray.resize(new_size, Image.Resampling.BILINEAR)
 
         # Invert if needed (OCR prefers black text on white)
         if invert:
@@ -268,9 +268,10 @@ class OCREngine:
 
         # Only include dark text from rows WITHOUT significant colored pixels
         is_dark = np.all(tight_cropped < 100, axis=2)
-        for i in range(tight_cropped.shape[0]):
-            if not row_has_significant_color[i]:
-                result[i, is_dark[i]] = 0
+
+        # Vectorized masking: rows without significant color AND dark pixels
+        mask = (~row_has_significant_color[:, np.newaxis]) & is_dark
+        result[mask] = 0
 
         # Convert to PIL
         result_image = Image.fromarray(result, mode="L")
@@ -278,7 +279,7 @@ class OCREngine:
         # Upscale for better OCR
         scale = 2
         new_size = (result_image.width * scale, result_image.height * scale)
-        result_image = result_image.resize(new_size, Image.Resampling.LANCZOS)
+        result_image = result_image.resize(new_size, Image.Resampling.BILINEAR)
 
         # Debug: save intermediate images
         if self.debug_mode:
@@ -392,17 +393,15 @@ class OCREngine:
             image.save(self.debug_dir / "trigger_raw.png")
             processed.save(self.debug_dir / "trigger_processed.png")
 
-        # Extract with limited whitelist for speed
-        result = self.extract_text(
-            processed,
-            single_line=True,
-            whitelist=string.ascii_uppercase,
-        )
-
-        # Check if trigger word is present
-        if result.text:
-            # Fuzzy match - allow for some OCR errors
-            return self._fuzzy_match(result.text.upper(), self.TRIGGER_WORD)
+        # Extract with limited whitelist for speed using image_to_string (faster than image_to_data)
+        config = f'--psm 7 -c tessedit_char_whitelist="{string.ascii_uppercase}"'
+        try:
+            text = pytesseract.image_to_string(processed, config=config)
+            if text:
+                # Fuzzy match - allow for some OCR errors
+                return self._fuzzy_match(text.strip().upper(), self.TRIGGER_WORD)
+        except pytesseract.TesseractError:
+            pass
 
         return False
 
