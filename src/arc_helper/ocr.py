@@ -5,19 +5,12 @@ Screen capture and text extraction using Tesseract.
 
 # Enable windows DPI scaling
 import ctypes
-from contextlib import suppress
-
-try:
-    # Windows 10 1607+ (most reliable)
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
-except Exception:  # noqa
-    with suppress(Exception):
-        # Fallback for older Windows
-        ctypes.windll.user32.SetProcessDPIAware()
-
 import re
 import string
+import typing
+from contextlib import suppress
 
+import numpy as np
 import pytesseract
 from PIL import Image
 from PIL import ImageGrab
@@ -28,6 +21,14 @@ from .config import RegionMixin
 from .config import get_screen_resolution
 from .config import get_settings
 from .config import logger
+
+try:
+    # Windows 10 1607+ (most reliable)
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+except (AttributeError, OSError):
+    with suppress(AttributeError, OSError):
+        # Fallback for older Windows
+        ctypes.windll.user32.SetProcessDPIAware()
 
 
 class Point(BaseModel):
@@ -52,7 +53,7 @@ def get_cursor_position() -> Point:
     ctypes.windll.user32.SetProcessDPIAware()
 
     class POINT(ctypes.Structure):
-        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+        _fields_: typing.ClassVar = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
     pt = POINT()
     ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
@@ -90,9 +91,7 @@ class OCREngine:
         """Capture a screen region."""
         try:
             return ImageGrab.grab(bbox=region.bbox)
-        except Exception as e:
-            from .config import logger
-
+        except OSError as e:
             logger.error(f"Screen grab failed for region {region.bbox}: {e}")
             # Return a dummy image to avoid crashing
             return Image.new("RGB", (region.width, region.height), color="black")
@@ -147,7 +146,7 @@ class OCREngine:
 
         try:
             image = ImageGrab.grab(bbox=(left, top, right, bottom))
-        except Exception as e:
+        except OSError as e:
             from .config import logger
 
             logger.error(
@@ -166,7 +165,7 @@ class OCREngine:
 
     @staticmethod
     def preprocess_for_ocr(
-        image: Image.Image, invert: bool = True, scale: int = 2
+        image: Image.Image, *, invert: bool = True, scale: int = 2
     ) -> Image.Image:
         """
         Preprocess image for better OCR accuracy.
@@ -199,8 +198,6 @@ class OCREngine:
         Preprocess tooltip image by isolating the cream-colored tooltip background
         and extracting dark text from it.
         """
-        import numpy as np
-
         img_array = np.array(image)
 
         # Tooltip background is #f9eedf = RGB(249, 238, 223)
@@ -306,6 +303,7 @@ class OCREngine:
     def extract_text(
         self,
         image: Image.Image,
+        *,
         single_line: bool = True,
         whitelist: str | None = None,
     ) -> OCRResult:
@@ -443,7 +441,7 @@ class OCREngine:
             logger.debug(f"Raw tooltip OCR:\n{text}")
 
             # Parse the text to find the item name
-            item_name = self._parse_item_name_from_tooltip(text)
+            item_name = self.parse_item_name_from_tooltip(text)
 
             if item_name:
                 logger.debug(f"Extracted item name: '{item_name}'")
@@ -454,7 +452,7 @@ class OCREngine:
 
         return None
 
-    def _parse_item_name_from_tooltip(self, text: str) -> str | None:
+    def parse_item_name_from_tooltip(self, text: str) -> str | None:
         """
         Parse item name from tooltip OCR text.
 
@@ -513,7 +511,7 @@ class OCREngine:
 
         try:
             text = pytesseract.image_to_string(processed, config="--psm 6")
-            return self._parse_item_name_from_tooltip(text)
+            return self.parse_item_name_from_tooltip(text)
         except pytesseract.TesseractError as e:
             logger.error(f"OCR Error: {e}")
             return None
