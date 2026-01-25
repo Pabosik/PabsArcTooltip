@@ -138,8 +138,6 @@ class OCREngine:
             right - left < self.tooltip_width // 2
             or bottom - top < self.tooltip_height // 2
         ):
-            from .config import logger
-
             logger.debug(
                 f"Capture region clamped significantly: cursor=({cursor.x}, {cursor.y}), bbox=({left}, {top}, {right}, {bottom})"
             )
@@ -147,8 +145,6 @@ class OCREngine:
         try:
             image = ImageGrab.grab(bbox=(left, top, right, bottom))
         except OSError as e:
-            from .config import logger
-
             logger.error(
                 f"Screen grab failed at bbox ({left}, {top}, {right}, {bottom}): {e}"
             )

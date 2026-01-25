@@ -244,6 +244,8 @@ class Scanner:
             logger.debug(f"Found: {item_name} → {recommendation.action}")
         else:
             logger.debug(f"Unknown item: {item_name}")
+            # Log to missing items file for easier database updates
+            self.db.log_missing_item(item_name)
 
         # Show overlay (must be done on main thread)
         self._show_overlay(item_name, recommendation)
